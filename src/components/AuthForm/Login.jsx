@@ -3,23 +3,26 @@ import {
   AlertIcon,
   Button,
   Input,
-  Text,
   VStack,
 } from "@chakra-ui/react";
 import { useState } from "react";
-import { AddIcon, LockIcon } from "@chakra-ui/icons"; // Import icons
-import useAdminLogin from "../../hooks/useAdminLogin"; // Custom hook for login/signup logic
+import { LockIcon } from "@chakra-ui/icons"; // Import icons
+import { useNavigate } from "react-router-dom"; // Import useNavigate
+import { getAuth, signInWithEmailAndPassword } from "firebase/auth"; // Firebase auth
 
 const Login = () => {
   const [inputs, setInputs] = useState({
     email: "",
     password: "",
   });
-  const [emailError, setEmailError] = useState(null); // State for email validation error
-  const [isSignUp, setIsSignUp] = useState(false); // Track whether in sign-up mode
-  const { loading, error, login, signup } = useAdminLogin();
 
-  const handleAuth = () => {
+  const [emailError, setEmailError] = useState(null); // State for email validation error
+  const [firebaseError, setFirebaseError] = useState(null); // State for firebase login error
+  const [loading, setLoading] = useState(false); // Loading state
+  const navigate = useNavigate(); // Initialize useNavigate for routing
+  const auth = getAuth(); // Get the Firebase auth instance
+
+  const handleLogin = async () => {
     const emailRegex = /^[a-zA-Z0-9._%+-]+@vbithyd\.ac\.in$/;
 
     // Check if email matches the required domain
@@ -30,10 +33,19 @@ const Login = () => {
       setEmailError(null); // Clear the error if the email is valid
     }
 
-    if (isSignUp) {
-      signup(inputs); // Trigger signup if in sign-up mode
-    } else {
-      login(inputs); // Trigger login if not in sign-up mode
+    setLoading(true); // Set loading state to true
+    setFirebaseError(null); // Clear any previous Firebase errors
+
+    try {
+      // Attempt to sign in the user with Firebase
+      await signInWithEmailAndPassword(auth, inputs.email, inputs.password);
+      alert("Login successful!"); // Alert on successful login
+      navigate("/home"); // Navigate to the home page or dashboard after successful login
+    } catch (error) {
+      setFirebaseError(error.message); // Capture any Firebase errors
+      console.error("Login error:", error); // Log the error for debugging
+    } finally {
+      setLoading(false); // Reset loading state
     }
   };
 
@@ -65,65 +77,44 @@ const Login = () => {
         </Alert>
       )}
 
-      {/* Show server-side error if it exists */}
-      {error && (
+      {/* Show Firebase error if it exists */}
+      {firebaseError && (
         <Alert status="error" fontSize={13} p={2} borderRadius={4}>
           <AlertIcon fontSize={12} />
-          {error.message}
+          {firebaseError}
         </Alert>
       )}
 
-      {/* Conditionally render Log In button if not in sign-up mode */}
-      {!isSignUp && (
-        <Button
-          w={"full"}
-          colorScheme="green"
-          size={"md"}
-          fontSize={16}
-          isLoading={loading && !isSignUp} // Show loading if login is in progress
-          onClick={() => {
-            setIsSignUp(false); // Ensure login mode is active
-            handleAuth(); // Handle login
-          }}
-          leftIcon={<LockIcon />} // Lock icon for login
-        >
-          Log In
-        </Button>
-      )}
+      {/* Login Button */}
+      <Button
+        w={"full"}
+        colorScheme="green"
+        size={"md"}
+        fontSize={16}
+        isLoading={loading}
+        onClick={handleLogin}
+        leftIcon={<LockIcon />}
+      >
+        Log In
+      </Button>
 
-      {/* Conditionally render Sign Up button if in sign-up mode */}
-      {isSignUp && (
-        <Button
-          w={"full"}
-          colorScheme="green"
-          size={"md"}
-          fontSize={16}
-          isLoading={loading && isSignUp} // Show loading if signup is in progress
-          onClick={() => handleAuth()} // Handle sign up
-          leftIcon={<AddIcon />} // Add icon for sign-up
-        >
-          Sign Up
-        </Button>
-      )}
+      {/* Forgot Password Button, navigates to reset-password */}
+      <Button
+        variant="link"
+        colorScheme="blue"
+        onClick={() => navigate("/reset-password")} // Navigate to reset-password page
+      >
+        Forgot Password?
+      </Button>
 
-      {/* Switch between Log In and Sign Up mode */}
-      {!isSignUp ? (
-        <Button
-          variant="link"
-          colorScheme="black"
-          onClick={() => setIsSignUp(true)} // Switch to sign-up mode
-        >
-          Don't have an account? Sign Up
-        </Button>
-      ) : (
-        <Button
-          variant="link"
-          colorScheme="teal"
-          onClick={() => setIsSignUp(false)} // Switch back to log-in mode
-        >
-          Already have an account? Log In
-        </Button>
-      )}
+      {/* Sign Up Button, navigates to sign-up page */}
+      <Button
+        variant="link"
+        colorScheme="black"
+        onClick={() => navigate("/signup")} // Navigate to signup page
+      >
+        Don't have an account? Sign Up
+      </Button>
     </VStack>
   );
 };

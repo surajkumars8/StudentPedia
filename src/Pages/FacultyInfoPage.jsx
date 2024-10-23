@@ -1,189 +1,179 @@
 import React, { useState, useEffect } from 'react';
-import { db } from '../firebase/firebase'; // Ensure the path is correct
 import {
-  collection,
-  addDoc,
-  getDocs,
-  serverTimestamp,
-  doc,
-  getDoc,
-  deleteDoc,
-  updateDoc,
-} from 'firebase/firestore';
-import { getAuth, onAuthStateChanged } from 'firebase/auth';
-import {
-  Box,
   Button,
-  Flex,
-  FormControl,
-  FormLabel,
-  Input,
-  Textarea,
-  Heading,
-  Image,
-  useToast,
-  SimpleGrid,
   Card,
   CardBody,
+  CardFooter,
+  CardHeader,
+  Heading,
   Text,
-  ScaleFade,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalCloseButton,
+  ModalBody,
+  ModalFooter,
+  Input,
+  useToast,
+  Image,
 } from '@chakra-ui/react';
+import { getAuth } from 'firebase/auth';
+import useAuthStore from '../store/authStore';
+import { firestore, storage } from '../firebase/firebase';
+import { collection, addDoc, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-const FacultyInfoPage = () => {
-  const [facultyData, setFacultyData] = useState({
-    id: '',
-    name: '',
-    contactNumber: '',
-    additionalInfo: '',
-  });
-  const [imageFile, setImageFile] = useState(null);
-  const [imagePreview, setImagePreview] = useState(null);
+const FacultyPage = () => {
+  const user = useAuthStore((state) => state.user);
+  const isAdmin = user && user.isAdmin;
+
+  const [isOpen, setIsOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [currentFacultyId, setCurrentFacultyId] = useState(null);
+  const [newName, setNewName] = useState('');
+  const [newPosition, setNewPosition] = useState('');
+  const [newDepartment, setNewDepartment] = useState('');
   const [facultyList, setFacultyList] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [editing, setEditing] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [imageFile, setImageFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
     const fetchFaculty = async () => {
-      const facultyCollection = collection(db, 'faculty');
-      const facultySnapshot = await getDocs(facultyCollection);
-      const facultyDataList = facultySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setFacultyList(facultyDataList);
-    };
-
-    const checkAdminRole = async () => {
-      const auth = getAuth();
-      onAuthStateChanged(auth, async (user) => {
-        if (user) {
-          const userDocRef = doc(db, 'users', user.uid);
-          const userDocSnap = await getDoc(userDocRef);
-          if (userDocSnap.exists()) {
-            const userData = userDocSnap.data();
-            setIsAdmin(userData.role === 'admin'); // Set admin status
-          }
-        }
-      });
-    };
-
-    fetchFaculty();
-    checkAdminRole();
-  }, []);
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFacultyData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    setImageFile(file);
-    if (file) {
-      const previewUrl = URL.createObjectURL(file);
-      setImagePreview(previewUrl);
-    } else {
-      setImagePreview(null);
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!isAdmin) {
-      toast({
-        title: 'Error',
-        description: 'You do not have permission to perform this action.',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
-
-    if (!facultyData.name || !facultyData.contactNumber) {
-      toast({
-        title: 'Error',
-        description: 'Name and contact number are required.',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
-
-    try {
-      if (editing) {
-        await updateDoc(doc(db, 'faculty', facultyData.id), {
-          name: facultyData.name,
-          contactNumber: facultyData.contactNumber,
-          additionalInfo: facultyData.additionalInfo,
-          timestamp: serverTimestamp(),
-        });
-
+      try {
+        const facultyCollection = collection(firestore, 'faculty');
+        const facultySnapshot = await getDocs(facultyCollection);
+        const facultyList = facultySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        setFacultyList(facultyList);
+      } catch (error) {
+        console.error('Error fetching faculty:', error);
         toast({
-          title: 'Faculty Information Updated',
-          description: 'The faculty information has been updated successfully.',
-          status: 'success',
-          duration: 3000,
-          isClosable: true,
-        });
-      } else {
-        await addDoc(collection(db, 'faculty'), {
-          name: facultyData.name,
-          contactNumber: facultyData.contactNumber,
-          additionalInfo: facultyData.additionalInfo,
-          timestamp: serverTimestamp(),
-        });
-
-        toast({
-          title: 'Faculty Information Submitted',
-          description: 'The faculty information has been submitted successfully.',
-          status: 'success',
+          title: 'Error fetching faculty',
+          description: 'Failed to load faculty from Firestore. Check your permissions.',
+          status: 'error',
           duration: 3000,
           isClosable: true,
         });
       }
+    };
 
-      setFacultyData({
-        id: '',
-        name: '',
-        contactNumber: '',
-        additionalInfo: '',
+    fetchFaculty();
+  }, []);
+
+  const checkAuth = () => {
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+    return currentUser;
+  };
+
+  const handleAddFaculty = async () => {
+    if (!isAdmin) {
+      toast({
+        title: 'Unauthorized',
+        description: 'Only admins can add faculty.',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
       });
-      setImageFile(null);
-      setImagePreview(null);
-      setShowForm(false);
-      setEditing(false);
+      return;
+    }
 
-      // Refresh faculty list
-      const facultyCollection = collection(db, 'faculty');
-      const facultySnapshot = await getDocs(facultyCollection);
-      const facultyDataList = facultySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setFacultyList(facultyDataList);
+    const currentUser = checkAuth();
+    if (!currentUser) {
+      toast({
+        title: 'Unauthorized',
+        description: 'You must be logged in to add faculty.',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    if (!imageFile) {
+      toast({
+        title: 'Image Required',
+        description: 'Please upload an image before adding faculty information.',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const uniqueFileName = `faculty/${Date.now()}_${imageFile.name}`;
+      const storageRef = ref(storage, uniqueFileName);
+      await uploadBytes(storageRef, imageFile);
+      const downloadURL = await getDownloadURL(storageRef);
+
+      const newFaculty = {
+        name: newName,
+        position: newPosition,
+        department: newDepartment,
+        imageUrl: downloadURL,
+      };
+
+      const docRef = await addDoc(collection(firestore, 'faculty'), newFaculty);
+      setFacultyList([...facultyList, { id: docRef.id, ...newFaculty }]);
+
+      toast({
+        title: 'Faculty Added',
+        description: 'Faculty information has been successfully added.',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+      resetForm();
     } catch (error) {
-      console.error('Error adding/updating document: ', error);
+      console.error('Error adding faculty:', error);
       toast({
         title: 'Error',
-        description: 'There was an error submitting the faculty information.',
+        description: 'Failed to add faculty. Please try again.',
         status: 'error',
         duration: 3000,
         isClosable: true,
       });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleEditFaculty = (facultyId) => {
     if (!isAdmin) {
       toast({
-        title: 'Error',
-        description: 'You do not have permission to perform this action.',
-        status: 'error',
+        title: 'Unauthorized',
+        description: 'Only admins can edit faculty.',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    const facultyToEdit = facultyList.find((faculty) => faculty.id === facultyId);
+    if (facultyToEdit) {
+      setIsEditMode(true);
+      setCurrentFacultyId(facultyId);
+      setNewName(facultyToEdit.name);
+      setNewPosition(facultyToEdit.position);
+      setNewDepartment(facultyToEdit.department);
+      setIsOpen(true);
+    }
+  };
+
+  const handleDeleteFaculty = async (facultyId, e) => {
+    e.stopPropagation(); // Prevent triggering card click
+    if (!isAdmin) {
+      toast({
+        title: 'Unauthorized',
+        description: 'Only admins can delete faculty.',
+        status: 'warning',
         duration: 3000,
         isClosable: true,
       });
@@ -191,20 +181,22 @@ const FacultyInfoPage = () => {
     }
 
     try {
-      await deleteDoc(doc(db, 'faculty', id));
-      setFacultyList((prevList) => prevList.filter((faculty) => faculty.id !== id));
+      await deleteDoc(doc(firestore, 'faculty', facultyId));
+      const updatedFacultyList = facultyList.filter((faculty) => faculty.id !== facultyId);
+      setFacultyList(updatedFacultyList);
+
       toast({
-        title: 'Faculty Information Deleted',
-        description: 'The faculty information has been deleted successfully.',
+        title: 'Faculty Deleted',
+        description: 'Faculty information has been successfully deleted.',
         status: 'success',
         duration: 3000,
         isClosable: true,
       });
     } catch (error) {
-      console.error('Error deleting document: ', error);
+      console.error('Error deleting faculty:', error);
       toast({
         title: 'Error',
-        description: 'There was an error deleting the faculty information.',
+        description: 'Failed to delete faculty. Please try again.',
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -212,142 +204,178 @@ const FacultyInfoPage = () => {
     }
   };
 
-  const handleEdit = (faculty) => {
-    setFacultyData({
-      id: faculty.id,
-      name: faculty.name,
-      contactNumber: faculty.contactNumber,
-      additionalInfo: faculty.additionalInfo,
-    });
-    setImagePreview(faculty.imagePreview);
-    setShowForm(true);
-    setEditing(true);
+  const handleFileChange = (e) => {
+    setImageFile(e.target.files[0]);
+  };
+
+  const resetForm = () => {
+    setIsOpen(false);
+    setIsEditMode(false);
+    setNewName('');
+    setNewPosition('');
+    setNewDepartment('');
+    setImageFile(null);
+    setCurrentFacultyId(null);
+  };
+
+  const handleCardClick = (imageUrl) => {
+    setPreviewUrl(imageUrl);
+    setIsPreviewOpen(true);
+  };
+
+  const styles = {
+    container: {
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      flexDirection: 'column',
+      padding: '20px',
+      backgroundColor: '#f8f9fa',
+      minHeight: '100vh',
+      width: '100%',
+    },
+    mainContent: {
+      width: '100%',
+      maxWidth: '1200px',
+      backgroundColor: '#ffffff',
+      borderRadius: '8px',
+      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
+      padding: '20px',
+      marginTop: '20px',
+    },
+    cardContainer: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+      gap: '20px',
+      marginTop: '20px',
+      width: '100%',
+    },
+    card: {
+      position: 'relative',
+      cursor: 'pointer',
+      transition: 'transform 0.2s',
+      boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+      borderRadius: '8px',
+      background: '#fff',
+      padding: '16px',
+      color: '#000',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'space-between',
+    },
+    actionButtons: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      marginTop: '10px',
+    },
+    addButton: {
+      position: 'fixed',
+      bottom: '20px',
+      right: '20px',
+      backgroundColor: '#007bff',
+      color: 'white',
+      borderRadius: '50%',
+      width: '56px',
+      height: '56px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '24px',
+      boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
+      cursor: 'pointer',
+      transition: 'transform 0.2s',
+    },
   };
 
   return (
-    <div>
-      <Box
-        width="100%"
-        height="100vh"
-        bg="black"
-        borderRadius="10px"
-        boxShadow="lg"
-        p={5}
-        mt={0}
-        mx="auto"
-        overflowY="auto"
-      >
-        <Heading as="h2" textAlign="center" mb={4}>
+    <div style={styles.container}>
+      <div style={styles.mainContent}>
+        <Heading as="h1" size="xl" textAlign="center">
           Faculty Information
         </Heading>
 
-        {isAdmin && (
-          <Button
-            colorScheme="teal"
-            onClick={() => setShowForm(!showForm)}
-            mb={4}
-          >
-            {showForm ? 'Hide Form' : 'Add Faculty Information'}
-          </Button>
-        )}
-
-        {isAdmin && showForm && (
-          <form onSubmit={handleSubmit}>
-            <FormControl mb={4} isRequired>
-              <FormLabel>Name</FormLabel>
-              <Input
-                type="text"
-                name="name"
-                value={facultyData.name}
-                onChange={handleChange}
-              />
-            </FormControl>
-            <FormControl mb={4} isRequired>
-              <FormLabel>Contact Number</FormLabel>
-              <Input
-                type="text"
-                name="contactNumber"
-                value={facultyData.contactNumber}
-                onChange={handleChange}
-              />
-            </FormControl>
-            <FormControl mb={4}>
-              <FormLabel>Additional Information</FormLabel>
-              <Textarea
-                name="additionalInfo"
-                value={facultyData.additionalInfo}
-                onChange={handleChange}
-              />
-            </FormControl>
-            <FormControl mb={4}>
-              <FormLabel>Upload Photo</FormLabel>
-              <Input type="file" accept="image/*" onChange={handleFileChange} />
-              {imagePreview && (
-                <Image
-                  src={imagePreview}
-                  alt="Preview"
-                  boxSize="150px"
-                  objectFit="cover"
-                  mt={2}
-                  borderRadius="5px"
-                />
-              )}
-            </FormControl>
-            <Button type="submit" colorScheme="teal" width="full">
-              {editing ? 'Update Faculty' : 'Submit'}
-            </Button>
-          </form>
-        )}
-
-        <SimpleGrid columns={1} spacing={4} mt={5}>
+        <div style={styles.cardContainer}>
           {facultyList.map((faculty) => (
-            <ScaleFade key={faculty.id} initialScale={0.9} in={true}>
-              <Card variant="outline" mb={4} boxShadow="md" borderRadius="md">
-                <CardBody>
-                  <Flex align="center">
-                    {faculty.imagePreview && (
-                      <Image
-                        src={faculty.imagePreview}
-                        alt={faculty.name}
-                        boxSize="100px"
-                        objectFit="cover"
-                        borderRadius="full"
-                        mr={4}
-                      />
-                    )}
-                    <Box>
-                      <Text fontWeight="bold" fontSize="lg">{faculty.name}</Text>
-                      <Text fontSize="sm">{faculty.contactNumber}</Text>
-                      {faculty.additionalInfo && (
-                        <Text fontSize="sm" mt={1}>{faculty.additionalInfo}</Text>
-                      )}
-                    </Box>
-                    {isAdmin && (
-                      <Flex ml="auto">
-                        <Button
-                          colorScheme="blue"
-                          onClick={() => handleEdit(faculty)}
-                          mr={2}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          colorScheme="red"
-                          onClick={() => handleDelete(faculty.id)}
-                        >
-                          Delete
-                        </Button>
-                      </Flex>
-                    )}
-                  </Flex>
-                </CardBody>
-              </Card>
-            </ScaleFade>
+            <Card key={faculty.id} style={styles.card} onClick={() => handleCardClick(faculty.imageUrl)}>
+              <CardHeader>
+                <Heading size="md">{faculty.name}</Heading>
+                <Text>{faculty.position}</Text>
+                <Text>{faculty.department}</Text>
+              </CardHeader>
+              <CardBody>
+                <Image
+                  src={faculty.imageUrl}
+                  alt={faculty.name}
+                  style={{ width: '100%', height: 'auto', borderRadius: '8px' }}
+                />
+              </CardBody>
+              {isAdmin && (
+                <CardFooter style={styles.actionButtons}>
+                  <Button size="sm" colorScheme="blue" onClick={(e) => { e.stopPropagation(); handleEditFaculty(faculty.id); }}>
+                    Edit
+                  </Button>
+                  <Button size="sm" colorScheme="red" onClick={(e) => handleDeleteFaculty(faculty.id, e)}>
+                    Delete
+                  </Button>
+                </CardFooter>
+              )}
+            </Card>
           ))}
-        </SimpleGrid>
-      </Box>
+        </div>
+      </div>
+
+      {isAdmin && (
+        <div style={styles.addButton} onClick={() => setIsOpen(true)}>
+          +
+        </div>
+      )}
+
+      <Modal isOpen={isOpen} onClose={resetForm}>
+        <ModalOverlay />
+        <ModalContent>
+          <ModalHeader>{isEditMode ? 'Edit Faculty' : 'Add Faculty'}</ModalHeader>
+          <ModalCloseButton />
+          <ModalBody>
+            <Input
+              placeholder="Name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              mb={3}
+            />
+            <Input
+              placeholder="Position"
+              value={newPosition}
+              onChange={(e) => setNewPosition(e.target.value)}
+              mb={3}
+            />
+            <Input
+              placeholder="Department"
+              value={newDepartment}
+              onChange={(e) => setNewDepartment(e.target.value)}
+              mb={3}
+            />
+            <Input type="file" accept="image/*" onChange={handleFileChange} />
+          </ModalBody>
+          <ModalFooter>
+            <Button colorScheme="blue" onClick={handleAddFaculty} isLoading={loading}>
+              {isEditMode ? 'Save Changes' : 'Add Faculty'}
+            </Button>
+            <Button onClick={resetForm}>Cancel</Button>
+          </ModalFooter>
+        </ModalContent>
+      </Modal>
+
+      <Modal isOpen={isPreviewOpen} onClose={() => setIsPreviewOpen(false)} size="xl">
+        <ModalOverlay />
+        <ModalContent>
+          <ModalCloseButton />
+          <ModalBody>
+            <Image src={previewUrl} alt="Faculty Image Preview" />
+          </ModalBody>
+        </ModalContent>
+      </Modal>
     </div>
   );
 };
 
-export default FacultyInfoPage;
+export default FacultyPage;

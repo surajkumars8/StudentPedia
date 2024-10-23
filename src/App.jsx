@@ -17,6 +17,8 @@ import MockTestPage from "./Pages/MockTestPage";
 import NotesPage from "./Pages/NotesPage";
 import PreviousPaperPage from "./Pages/PreviousPaperPage";
 import Complaint from "./components/Complaint/Complaint.jsx";
+import ResetPassword from "./components/ResetPassword.jsx";
+import Signup from "./components/AuthForm/Signup.jsx";
 
 function App() {
   const [authUser] = useAuthState(auth);
@@ -84,6 +86,8 @@ function App() {
             )
           }
         />
+        <Route path="/signup" element={<Signup />} /> 
+          <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/createpost" element={<CreatePost />} />
         {/* <Route path="/:username" element={<ProfilePage />} /> */}
         <Route path="/notespage" element={<NotesPage />} />

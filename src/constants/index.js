@@ -1,3 +1,4 @@
+
 import { 
     faStickyNote, 
     faFileAlt, 
@@ -12,7 +13,11 @@ import {
     faRobot, 
     faUser  
   } from '@fortawesome/free-solid-svg-icons';
-  
+
+// Configure nodemailer transport
+
+
+
   export const notes = [
     {
       title: "M1",

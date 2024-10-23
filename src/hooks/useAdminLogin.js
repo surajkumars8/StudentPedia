@@ -1,13 +1,16 @@
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { useState } from 'react';
-import { auth, firestore } from '../firebase/firebase';
+import { auth, firestore } from '../firebase/firebase'; // Ensure your firebase setup is correctly imported
 import useAuthStore from '../store/authStore';
 
 const useAdminLogin = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const setAuthUser = useAuthStore((state) => state.setUser);
+    const sendPasswordResetEmail = async (email) => {
+        return await auth.sendPasswordResetEmail(email);
+      };
 
     const login = async (inputs) => {
         setLoading(true);
@@ -42,8 +45,7 @@ const useAdminLogin = () => {
             // Set user data in Firestore
             await setDoc(doc(firestore, 'users', user.uid), {
                 uid: user.uid,
-                // username: user.username,
-                // fullName: user.fullName,
+                fullName: inputs.fullName, // Ensure fullName is included
                 bio: "",
                 profilePicURL: "",
                 followers: [],
@@ -53,6 +55,10 @@ const useAdminLogin = () => {
                 email: user.email,
                 isAdmin: false, // By default, new users are not admins
             });
+
+            // Send verification email
+            await sendEmailVerification(user); // This sends the verification email to the user
+            console.log(`Verification email sent to ${user.email}`);
 
             setAuthUser({
                 ...user,
@@ -65,7 +71,7 @@ const useAdminLogin = () => {
         }
     };
 
-    return { loading, error, login, signup };
+    return { loading, error, login, signup,sendPasswordResetEmail };
 };
 
 export default useAdminLogin;

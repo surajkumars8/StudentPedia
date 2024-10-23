@@ -1,228 +1,162 @@
-import { ViewIcon, ViewOffIcon } from "@chakra-ui/icons";
-import {
-  Alert,
-  AlertIcon,
-  Button,
-  Input,
-  InputGroup,
-  InputRightElement,
-  VStack,
-  Text,
-} from "@chakra-ui/react";
-import { useState } from "react";
-import { useNavigate } from "react-router-dom"; // Import useNavigate for redirection
-import { getAuth, createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { getAuth, createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 
 const Signup = () => {
   const [inputs, setInputs] = useState({
-    fullName: "",
-    username: "",
+    firstName: "",
     email: "",
-    otp: "",
     password: "",
     confirmPassword: "",
   });
   const [showPassword, setShowPassword] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpVerified, setOtpVerified] = useState(false);
   const [passwordsMatch, setPasswordsMatch] = useState(true);
-  const [emailError, setEmailError] = useState(null);
   const [firebaseError, setFirebaseError] = useState(null);
   const [loading, setLoading] = useState(false);
-  
-  const navigate = useNavigate(); // Initialize useNavigate
+  const [verificationEmailSent, setVerificationEmailSent] = useState(false);
+
+  const navigate = useNavigate();
   const auth = getAuth();
 
-  // Function to send OTP to the user's email
-  const handleSendOTP = async () => {
-    const emailRegex = /^[a-zA-Z0-9._%+-]+@vbithyd\.ac\.in$/;
-    if (!emailRegex.test(inputs.email)) {
-      setEmailError("Please use a valid vbithyd.ac.in email address.");
-      return;
-    }
-
-    // Simulate sending OTP. In a real app, you would implement actual OTP sending logic.
-    setOtpSent(true);
-    setEmailError(null);
-    alert("OTP sent to your email. Please check your inbox.");
-  };
-
-  // Function to verify the OTP entered by the user
-  const handleVerifyOTP = () => {
-    // In a real application, replace this with actual OTP verification logic.
-    if (inputs.otp === "123456") { // Simulated OTP for demonstration
-      setOtpVerified(true);
-      alert("Email verified successfully!");
-    } else {
-      alert("Invalid OTP, please try again.");
-    }
-  };
-
-  // Function to handle user signup
   const handleSignup = async () => {
     if (inputs.password !== inputs.confirmPassword) {
       setPasswordsMatch(false);
       return;
     }
 
+    if (!inputs.email.endsWith('@vbithyd.ac.in')) {
+      setFirebaseError('Please use your @vbithyd.ac.in email address');
+      return;
+    }
+
     setPasswordsMatch(true);
     setLoading(true);
+    setFirebaseError(null);
 
     try {
-      // Create a new user in Firebase
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         inputs.email,
         inputs.password
       );
-      console.log("User created:", userCredential.user);
 
-      // Send email verification
       await sendEmailVerification(userCredential.user);
-      alert("Signup successful! Please check your email for verification link.");
-
-      // Redirect to login page
-      navigate("/login"); // Adjust the path based on your routing setup
-
+      setVerificationEmailSent(true);
+      
     } catch (error) {
-      setFirebaseError(error.message);
+      setFirebaseError(
+        error.code === 'auth/email-already-in-use'
+          ? 'This email is already registered. Please login instead.'
+          : error.message
+      );
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <VStack spacing={4} align="stretch">
-      <Input
-        placeholder="Full Name"
-        fontSize={14}
-        type="text"
-        size={"sm"}
-        value={inputs.fullName}
-        onChange={(e) => setInputs({ ...inputs, fullName: e.target.value })}
-      />
+    <div className="min-h-screen flex items-center justify-center bg-[#f4f9f4] relative overflow-hidden">
+      {/* Background decorative elements */}
+      <div className="absolute top-0 right-0 w-48 h-48 bg-[#c3ecc3] rounded-full -translate-y-1/2 translate-x-1/2" />
+      <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#c3ecc3] rounded-full translate-y-1/2 -translate-x-1/2" />
+      <div className="absolute top-20 left-20 w-16 h-16 bg-[#c3ecc3] rounded-full" />
+      
+      {/* Main content */}
+      <div className="w-full max-w-md">
+        {/* Logo */}
+        <div className="flex items-center justify-center mb-8">
+          <img src="/logo.png" alt="StudentPedia" className="h-8" />
+          <span className="text-2xl font-bold ml-2">StudentPedia</span>
+        </div>
 
-      <Input
-        placeholder="Username"
-        fontSize={14}
-        type="text"
-        size={"sm"}
-        value={inputs.username}
-        onChange={(e) => setInputs({ ...inputs, username: e.target.value })}
-      />
+        {/* Signup Form Card */}
+        <div className="bg-white rounded-lg shadow-lg p-8 relative z-10">
+          <h2 className="text-xl font-semibold mb-6">Create account</h2>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Firstname*
+              </label>
+              <input
+                className="w-full p-3 bg-[#E8E8E8] rounded-md focus:outline-none focus:ring-2 focus:ring-[#a8e4a8]"
+                placeholder="Enter your name"
+                value={inputs.firstName}
+                onChange={(e) => setInputs({ ...inputs, firstName: e.target.value })}
+              />
+            </div>
 
-      <Input
-        placeholder="Email (@vbithyd.ac.in)"
-        fontSize={14}
-        type="email"
-        size={"sm"}
-        value={inputs.email}
-        onChange={(e) => setInputs({ ...inputs, email: e.target.value })}
-        isDisabled={otpSent}
-      />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Email*
+              </label>
+              <input
+                className="w-full p-3 bg-[#E8E8E8] rounded-md focus:outline-none focus:ring-2 focus:ring-[#a8e4a8]"
+                placeholder="Enter your email"
+                type="email"
+                value={inputs.email}
+                onChange={(e) => setInputs({ ...inputs, email: e.target.value })}
+              />
+            </div>
 
-      {!otpSent && (
-        <Button
-          size="sm"
-          colorScheme="blue"
-          fontSize={14}
-          onClick={handleSendOTP}
-        >
-          Send OTP
-        </Button>
-      )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Password!*
+              </label>
+              <input
+                className="w-full p-3 bg-[#E8E8E8] rounded-md focus:outline-none focus:ring-2 focus:ring-[#a8e4a8]"
+                placeholder="Enter your password"
+                type={showPassword ? "text" : "password"}
+                value={inputs.password}
+                onChange={(e) => setInputs({ ...inputs, password: e.target.value })}
+              />
+            </div>
 
-      {otpSent && !otpVerified && (
-        <>
-          <Input
-            placeholder="Enter OTP"
-            fontSize={14}
-            type="text"
-            size={"sm"}
-            value={inputs.otp}
-            onChange={(e) => setInputs({ ...inputs, otp: e.target.value })}
-          />
-          <Button
-            size="sm"
-            colorScheme="blue"
-            fontSize={14}
-            onClick={handleVerifyOTP}
-          >
-            Verify OTP
-          </Button>
-        </>
-      )}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Confirm Password*
+              </label>
+              <input
+                className="w-full p-3 bg-[#E8E8E8] rounded-md focus:outline-none focus:ring-2 focus:ring-[#a8e4a8]"
+                placeholder="Confirm your password"
+                type={showPassword ? "text" : "password"}
+                value={inputs.confirmPassword}
+                onChange={(e) => setInputs({ ...inputs, confirmPassword: e.target.value })}
+              />
+            </div>
 
-      {otpVerified && (
-        <>
-          <Text fontSize="sm" color="green.500">
-            Email verified successfully!
-          </Text>
-          <InputGroup>
-            <Input
-              placeholder="Password"
-              fontSize={14}
-              type={showPassword ? "text" : "password"}
-              value={inputs.password}
-              size={"sm"}
-              onChange={(e) => setInputs({ ...inputs, password: e.target.value })}
-            />
-            <InputRightElement h="full">
-              <Button
-                variant={"ghost"}
-                size={"sm"}
-                onClick={() => setShowPassword(!showPassword)}
+            {!passwordsMatch && (
+              <div className="text-red-600 text-sm">
+                Passwords do not match.
+              </div>
+            )}
+
+            {firebaseError && (
+              <div className="text-red-600 text-sm">
+                {firebaseError}
+              </div>
+            )}
+
+            <button
+              className="w-full bg-black text-white py-3 rounded-md hover:bg-gray-800 transition-colors"
+              disabled={loading}
+              onClick={handleSignup}
+            >
+              {loading ? "Creating account..." : "Create account"}
+            </button>
+
+            <div className="text-center">
+              <button
+                onClick={() => navigate('/login')}
+                className="text-black hover:underline text-sm"
               >
-                {showPassword ? <ViewIcon /> : <ViewOffIcon />}
-              </Button>
-            </InputRightElement>
-          </InputGroup>
-
-          <InputGroup>
-            <Input
-              placeholder="Confirm Password"
-              fontSize={14}
-              type={showPassword ? "text" : "password"}
-              value={inputs.confirmPassword}
-              size={"sm"}
-              onChange={(e) => setInputs({ ...inputs, confirmPassword: e.target.value })}
-            />
-          </InputGroup>
-
-          {!passwordsMatch && (
-            <Alert status="error" fontSize={13} p={2} borderRadius={4}>
-              <AlertIcon fontSize={12} />
-              Passwords do not match.
-            </Alert>
-          )}
-
-          <Button
-            w={"full"}
-            colorScheme="blue"
-            size={"sm"}
-            fontSize={14}
-            isLoading={loading}
-            onClick={handleSignup}
-          >
-            Sign Up
-          </Button>
-        </>
-      )}
-
-      {emailError && (
-        <Alert status="error" fontSize={13} p={2} borderRadius={4}>
-          <AlertIcon fontSize={12} />
-          {emailError}
-        </Alert>
-      )}
-
-      {firebaseError && (
-        <Alert status="error" fontSize={13} p={2} borderRadius={4}>
-          <AlertIcon fontSize={12} />
-          {firebaseError}
-        </Alert>
-      )}
-    </VStack>
+                goback
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 };
 
