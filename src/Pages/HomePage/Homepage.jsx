@@ -1,9 +1,6 @@
 import React from 'react';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faStickyNote, faFileAlt, faClipboardCheck, faVideo, faBoxOpen, faChalkboardTeacher, faComments, faSignOutAlt, faHome, faCommentDots, faRobot, faUser } from '@fortawesome/free-solid-svg-icons';
-import Navbar, { FloatingNav } from '../../components/Navbar/Navbar';
-import { navItems } from '../../constants';
-import NotesPage from '../NotesPage';
 import LectureVideosPage from '../LectureVideosPage';
 
 const HomePage = () => {
@@ -43,7 +40,6 @@ const HomePage = () => {
     return (
       
         <div style={styles.container}>
-          <FloatingNav navItems={navItems} />
 
 
             

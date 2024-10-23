@@ -27,7 +27,8 @@ import {
   import useUserProfileStore from "../../store/userProfileStore";
   // import Caption from "../Comment/Caption";
   // import Comment from "../Comment/Comment";
-  import PostFooter from "../FeedPosts/PostFooter";
+  // import PostFooter from "../FeedPosts/PostFooter";
+
   
   const ProfilePost = ({ post }) => {
     const { isOpen, onOpen, onClose } = useDisclosure();

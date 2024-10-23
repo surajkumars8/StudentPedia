@@ -21,7 +21,6 @@ const SidebarItems = () => {
       <LectureVideos />
       <LostFound />
       <FacultyInfo />
-      <CreatePost/>
       <ProfileLink/>
       <Forums/>
     </>

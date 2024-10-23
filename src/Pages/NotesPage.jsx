@@ -1,179 +1,310 @@
-import React, { useState } from 'react';
-import FloatingNav from '../components/Navbar/Navbar';
-import { navItems, notes } from '../constants';
-import { 
-  Button, 
-  Card, 
-  CardBody, 
-  CardFooter, 
-  CardHeader, 
-  Heading, 
-  Text, 
-  Modal, 
-  ModalOverlay, 
-  ModalContent, 
-  ModalHeader, 
-  ModalCloseButton, 
-  ModalBody, 
-  ModalFooter, 
-  Input, 
-  useToast // Import the toast hook
+import React, { useState, useEffect } from 'react';
+import {
+  Button,
+  Card,
+  CardBody,
+  CardFooter,
+  CardHeader,
+  Heading,
+  Text,
+  Modal,
+  ModalOverlay,
+  ModalContent,
+  ModalHeader,
+  ModalCloseButton,
+  ModalBody,
+  ModalFooter,
+  Input,
+  useToast,
 } from '@chakra-ui/react';
+import { getAuth } from 'firebase/auth';
+import useAuthStore from '../store/authStore';
+import { firestore, storage } from '../firebase/firebase';
+import { collection, addDoc, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const NotesPage = () => {
+  const user = useAuthStore((state) => state.user);
+  const isAdmin = user && user.isAdmin;
+
   const [isOpen, setIsOpen] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [currentNoteId, setCurrentNoteId] = useState(null);
   const [newTitle, setNewTitle] = useState('');
   const [newDescription, setNewDescription] = useState('');
-  const [noteList, setNoteList] = useState(notes); // Local state for notes
-  const [pdfFile, setPdfFile] = useState(null); // State for PDF file
-  const [editIndex, setEditIndex] = useState(null); // State for editing note
-  const [previewPdf, setPreviewPdf] = useState(null); // State for PDF preview
-  const [hoveredIndex, setHoveredIndex] = useState(null); // State for hovered note
-  const toast = useToast(); // Initialize the toast
+  const [noteList, setNoteList] = useState([]);
+  const [pdfFile, setPdfFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState('');
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const toast = useToast();
 
-  const handleAddNote = () => {
-    if (!pdfFile) {
+  useEffect(() => {
+    const fetchNotes = async () => {
+      try {
+        const notesCollection = collection(firestore, 'notes');
+        const notesSnapshot = await getDocs(notesCollection);
+        const notesList = notesSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+        setNoteList(notesList);
+      } catch (error) {
+        console.error('Error fetching notes:', error);
+        toast({
+          title: 'Error fetching notes',
+          description: 'Failed to load notes from Firestore. Check your permissions.',
+          status: 'error',
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+    };
+
+    fetchNotes();
+  }, []);
+
+  const checkAuth = () => {
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+    return currentUser;
+  };
+
+  const handleAddNote = async () => {
+    if (!isAdmin) {
       toast({
-        title: "File Required",
-        description: "Please upload a PDF file before adding a note.",
-        status: "warning",
+        title: 'Unauthorized',
+        description: 'Only admins can add notes.',
+        status: 'warning',
         duration: 3000,
         isClosable: true,
       });
       return;
     }
 
-    const newNote = {
-      title: newTitle,
-      year: '2023', // You can set this dynamically if needed
-      regulation: newDescription,
-      pdfUrl: URL.createObjectURL(pdfFile), // Create URL for the PDF
-    };
-    setNoteList([...noteList, newNote]);
-    toast({
-      title: "File Uploaded",
-      description: "Your PDF file has been uploaded successfully.",
-      status: "success",
-      duration: 3000,
-      isClosable: true,
-    });
-    resetForm(); // Reset the form after adding note
+    const currentUser = checkAuth();
+    if (!currentUser) {
+      toast({
+        title: 'Unauthorized',
+        description: 'You must be logged in to add notes.',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    if (!pdfFile) {
+      toast({
+        title: 'File Required',
+        description: 'Please upload a PDF file before adding a note.',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const uniqueFileName = `notes/${Date.now()}_${pdfFile.name}`;
+      const storageRef = ref(storage, uniqueFileName);
+      await uploadBytes(storageRef, pdfFile);
+      const downloadURL = await getDownloadURL(storageRef);
+
+      const newNote = {
+        title: newTitle,
+        regulation: newDescription,
+        pdfUrl: downloadURL,
+      };
+
+      const docRef = await addDoc(collection(firestore, 'notes'), newNote);
+      setNoteList([...noteList, { id: docRef.id, ...newNote }]);
+
+      toast({
+        title: 'Note Added',
+        description: 'Your PDF note has been successfully added.',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+      resetForm();
+    } catch (error) {
+      console.error('Error adding note:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to add note. Please try again.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleEditNote = (index) => {
-    const noteToEdit = noteList[index];
+  const handleEditNote = async (noteId) => {
+    if (!isAdmin) {
+      toast({
+        title: 'Unauthorized',
+        description: 'Only admins can edit notes.',
+        status: 'warning',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    setIsEditMode(true);
+    const noteToEdit = noteList.find((note) => note.id === noteId);
+    setCurrentNoteId(noteId);
     setNewTitle(noteToEdit.title);
     setNewDescription(noteToEdit.regulation);
-    setPdfFile(null); // Reset PDF
-    setEditIndex(index);
-    setIsOpen(true); // Open modal for editing
+    setIsOpen(true);
   };
 
-  const handleUpdateNote = () => {
-    if (!pdfFile) {
+  const handleUpdateNote = async () => {
+    const updatedNote = {
+      title: newTitle,
+      regulation: newDescription,
+      pdfUrl: noteList.find((note) => note.id === currentNoteId).pdfUrl,
+    };
+
+    try {
+      await deleteDoc(doc(firestore, 'notes', currentNoteId));
+
+      const docRef = await addDoc(collection(firestore, 'notes'), updatedNote);
+      const updatedNotes = noteList.map(note =>
+        note.id === currentNoteId ? { id: docRef.id, ...updatedNote } : note
+      );
+      setNoteList(updatedNotes);
+
       toast({
-        title: "File Required",
-        description: "Please upload a PDF file before updating the note.",
-        status: "warning",
+        title: 'Note Updated',
+        description: 'Your note has been successfully updated.',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+      resetForm();
+    } catch (error) {
+      console.error('Error updating note:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to update note. Please try again.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const handleDeleteNote = async (noteId) => {
+    if (!isAdmin) {
+      toast({
+        title: 'Unauthorized',
+        description: 'Only admins can delete notes.',
+        status: 'warning',
         duration: 3000,
         isClosable: true,
       });
       return;
     }
 
-    const updatedNoteList = [...noteList];
-    updatedNoteList[editIndex] = {
-      ...updatedNoteList[editIndex],
-      title: newTitle,
-      regulation: newDescription,
-      pdfUrl: URL.createObjectURL(pdfFile), // Update the PDF URL
-    };
-    setNoteList(updatedNoteList);
-    toast({
-      title: "File Uploaded",
-      description: "Your PDF file has been updated successfully.",
-      status: "success",
-      duration: 3000,
-      isClosable: true,
-    });
-    resetForm(); // Reset the form after updating note
-  };
+    try {
+      await deleteDoc(doc(firestore, 'notes', noteId));
+      const updatedNotes = noteList.filter(note => note.id !== noteId);
+      setNoteList(updatedNotes);
 
-  const handleDeleteNote = (index) => {
-    // Create a confirmation before deleting the note
-    if (window.confirm("Are you sure you want to delete this note?")) {
-      const updatedNoteList = noteList.filter((_, i) => i !== index);
-      setNoteList(updatedNoteList);
       toast({
-        title: "Note Deleted",
-        description: "The note has been deleted successfully.",
-        status: "info",
-        duration: 1500,
+        title: 'Note Deleted',
+        description: 'Your note has been successfully deleted.',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error('Error deleting note:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to delete note. Please try again.',
+        status: 'error',
+        duration: 3000,
         isClosable: true,
       });
     }
   };
 
-  const resetForm = () => {
-    setNewTitle('');
-    setNewDescription('');
-    setPdfFile(null);
-    setEditIndex(null);
-    setIsOpen(false); // Close modal
+  const handleDownload = (url, filename) => {
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    setPdfFile(file); // Set the PDF file
+    setPdfFile(e.target.files[0]);
   };
 
-  const handleDownload = (pdfUrl) => {
-    fetch(pdfUrl) // Fetch the PDF file
-      .then((response) => {
-        return response.blob(); // Convert it to a Blob
-      })
-      .then((blob) => {
-        const url = window.URL.createObjectURL(blob); // Create a URL for the Blob
-        const link = document.createElement('a'); // Create an anchor element
-        link.href = url; // Set the Blob URL as the href
-        link.download = pdfUrl.split('/').pop(); // Set the suggested file name
-        document.body.appendChild(link); // Append the link to the body
-        link.click(); // Programmatically click the link to trigger the download
-        link.remove(); // Remove the link from the document
-        window.URL.revokeObjectURL(url); // Clean up the Blob URL
-      })
-      .catch((error) => console.error('Download failed:', error));
+  const resetForm = () => {
+    setIsOpen(false);
+    setIsEditMode(false);
+    setNewTitle('');
+    setNewDescription('');
+    setPdfFile(null);
+    setCurrentNoteId(null);
   };
 
-  const handlePreview = (pdfUrl) => {
-    setPreviewPdf(pdfUrl);
-    setIsOpen(true);
+  const handleCardClick = (url) => {
+    setPreviewUrl(url);
+    setIsPreviewOpen(true);
   };
 
   const styles = {
     container: {
       display: 'flex',
-      height: '130vh',
-      fontFamily: 'Arial, sans-serif',
-    },
-    mainContent: {
-      flexGrow: 1,
-      display: 'flex',
-      flexDirection: 'column',
       justifyContent: 'center',
       alignItems: 'center',
-      backgroundColor: '#fff',
+      flexDirection: 'column',
       padding: '20px',
-      overflowY: 'auto',
+      backgroundColor: '#f8f9fa',
+      minHeight: '100vh',
+      width: '100%', // Ensure the container takes the full width
+    },
+    mainContent: {
+      width: '100%',
+      maxWidth: '1200px',
+      backgroundColor: '#ffffff',
+      borderRadius: '8px',
+      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
+      padding: '20px',
+      marginTop: '20px',
     },
     cardContainer: {
       display: 'grid',
       gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
       gap: '20px',
-      justifyContent: 'center',
-      marginTop: '50px',
-      maxWidth: '1200px',
-      margin: '0 auto',
+      marginTop: '20px',
+      width: '100%',
+    },
+    card: {
+      position: 'relative',
+      cursor: 'pointer',
+      transition: 'transform 0.2s',
+      boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
+      borderRadius: '8px',
+      background: '#fff',
+      padding: '16px',
+      color: '#000',
+      display: 'flex',
+      flexDirection: 'column',
+      justifyContent: 'space-between',
+    },
+    actionButtons: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      marginTop: '10px',
     },
     addButton: {
       position: 'fixed',
@@ -182,129 +313,151 @@ const NotesPage = () => {
       backgroundColor: '#007bff',
       color: 'white',
       borderRadius: '50%',
-      padding: '15px',
-      cursor: 'pointer',
-      boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
-    },
-    actionButtons: {
+      width: '56px',
+      height: '56px',
       display: 'flex',
-      gap: '5px',
-    },
-    cardWrapper: {
-      position: 'relative',
-      '&:hover $actionButtons': {
-        display: 'flex',
-      },
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '24px',
+      boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
       cursor: 'pointer',
+      transition: 'transform 0.2s',
+    },
+    addButtonHover: {
+      transform: 'scale(1.1)',
+    },
+    editButton: {
+      backgroundColor: '#ffc107',
+      color: 'black',
+      padding: '10px 20px',
+      borderRadius: '5px',
+      textAlign: 'center',
+      cursor: 'pointer',
+      transition: 'padding 0.2s',
+      '&:hover': {
+        backgroundColor: '#e0a800',
+        padding: '12px 22px',
+      },
+    },
+    deleteButton: {
+      backgroundColor: '#dc3545',
+      color: 'white',
+      padding: '10px 20px',
+      borderRadius: '5px',
+      textAlign: 'center',
+      cursor: 'pointer',
+      transition: 'padding 0.2s',
+      '&:hover': {
+        backgroundColor: '#c82333',
+        padding: '12px 22px',
+      },
+    },
+    downloadButton: {
+      backgroundColor: '#28a745',
+      color: 'white',
+      padding: '10px 20px',
+      borderRadius: '5px',
+      textAlign: 'center',
+      cursor: 'pointer',
+      '&:hover': {
+        backgroundColor: '#218838',
+      },
     },
   };
 
   return (
     <div style={styles.container}>
-      <FloatingNav navItems={navItems} />
       <div style={styles.mainContent}>
-        <Heading as="h1" size="2xl" color="black" mb={10} fontWeight="bold">Notes</Heading>
+        <Heading as="h1" size="lg" mb="4">Notes Page</Heading>
+        {isAdmin && (
+          <Button 
+            style={styles.addButton} 
+            onClick={() => setIsOpen(true)}
+            onMouseEnter={() => (styles.addButton.transform = styles.addButtonHover.transform)}
+            onMouseLeave={() => (styles.addButton.transform = '')}
+          >
+            +
+          </Button>
+        )}
         <div style={styles.cardContainer}>
-          {noteList.map((note, index) => (
-            <div 
-              key={index} 
-              style={styles.cardWrapper} 
-              onMouseEnter={() => setHoveredIndex(index)} 
-              onMouseLeave={() => setHoveredIndex(null)} // Clear hovered index
+          {noteList.map((note) => (
+            <Card 
+              key={note.id} 
+              style={styles.card}
+              onClick={() => handleCardClick(note.pdfUrl)} // Clickable area for preview
             >
-              <Card maxW="sm" p={4} onClick={() => handlePreview(note.pdfUrl)}>
-                <CardHeader>
-                  <Heading size='md'>{note.title}</Heading>
-                </CardHeader>
-                <CardBody>
-                  <Text>{note.year}</Text>
-                  <Text>{note.regulation}</Text>
-                </CardBody>
-                <CardFooter>
-                  <Button onClick={(e) => { e.stopPropagation(); handleDownload(note.pdfUrl); }}>Download</Button>
-                </CardFooter>
-              </Card>
-              {hoveredIndex === index && ( // Show action buttons only if hovered
-                <div style={styles.actionButtons}>
-                  <Button 
-                    size="sm" 
-                    onClick={(e) => { e.stopPropagation(); handleEditNote(index); }} 
-                    colorScheme="blue"
-                  >
-                    Edit
-                  </Button>
-                  <Button 
-                    size="sm" 
-                    onClick={(e) => { e.stopPropagation(); handleDeleteNote(index); }} 
-                    colorScheme="red"
-                  >
-                    Delete
-                  </Button>
-                </div>
-              )}
-            </div>
+              <CardHeader>
+                <Heading size="md" onClick={(e) => { e.stopPropagation(); handleCardClick(note.pdfUrl); }}>{note.title}</Heading>
+              </CardHeader>
+              <CardBody>
+                <Text onClick={(e) => { e.stopPropagation(); handleCardClick(note.pdfUrl); }}>{note.regulation}</Text>
+              </CardBody>
+              <CardFooter style={styles.actionButtons}>
+                {isAdmin && (
+                  <>
+                    <Button style={styles.editButton} onClick={(e) => { e.stopPropagation(); handleEditNote(note.id); }}>Edit</Button>
+                    <Button style={styles.deleteButton} onClick={(e) => { e.stopPropagation(); handleDeleteNote(note.id); }}>Delete</Button>
+                  </>
+                )}
+                <Button style={styles.downloadButton} onClick={(e) => { e.stopPropagation(); handleDownload(note.pdfUrl, note.title); }}>Download</Button>
+              </CardFooter>
+            </Card>
           ))}
         </div>
 
-        {/* Add Note Button */}
-        <div style={styles.addButton} onClick={() => setIsOpen(true)}>
-          <span style={{ fontSize: '24px', fontWeight: 'bold' }}>+</span>
-        </div>
-
-        {/* Modal for Adding/Editing Note */}
+        {/* Add/Edit Note Modal */}
         <Modal isOpen={isOpen} onClose={resetForm}>
           <ModalOverlay />
           <ModalContent>
-            <ModalHeader>{editIndex !== null ? 'Edit Note' : 'Add a New Note'}</ModalHeader>
+            <ModalHeader>{isEditMode ? 'Edit Note' : 'Add Note'}</ModalHeader>
             <ModalCloseButton />
             <ModalBody>
-              <Input 
-                placeholder="Title" 
-                value={newTitle} 
-                onChange={(e) => setNewTitle(e.target.value)} 
-                mb={3}
+              <Input
+                placeholder="Title"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                mb={4}
               />
-              <Input 
-                placeholder="Description" 
-                value={newDescription} 
-                onChange={(e) => setNewDescription(e.target.value)} 
-                mb={3}
+              <Input
+                placeholder="Description"
+                value={newDescription}
+                onChange={(e) => setNewDescription(e.target.value)}
+                mb={4}
               />
-              <Input 
-                type="file" 
-                accept="application/pdf" 
-                onChange={handleFileChange} 
+              <Input
+                type="file"
+                onChange={handleFileChange}
+                accept=".pdf"
               />
             </ModalBody>
             <ModalFooter>
-              <Button colorScheme="blue" onClick={editIndex !== null ? handleUpdateNote : handleAddNote}>
-                {editIndex !== null ? 'Update Note' : 'Add Note'}
-              </Button>
-              <Button onClick={resetForm} ml={3}>
-                Cancel
+              <Button onClick={resetForm}>Cancel</Button>
+              <Button
+                colorScheme="blue"
+                onClick={isEditMode ? handleUpdateNote : handleAddNote}
+                isLoading={loading}
+                ml={3}
+              >
+                {isEditMode ? 'Update Note' : 'Add Note'}
               </Button>
             </ModalFooter>
           </ModalContent>
         </Modal>
 
-        {/* Preview PDF Modal */}
-        <Modal isOpen={!!previewPdf} onClose={() => setPreviewPdf(null)}>
+        {/* Preview Modal */}
+        <Modal isOpen={isPreviewOpen} onClose={() => setIsPreviewOpen(false)}>
           <ModalOverlay />
           <ModalContent>
-            <ModalHeader>PDF Preview</ModalHeader>
+            <ModalHeader>Preview</ModalHeader>
             <ModalCloseButton />
             <ModalBody>
-              {previewPdf && (
-                <iframe 
-                  src={previewPdf}
-                  style={{ width: '100%', height: '500px' }} 
-                  title="PDF Preview"
-                />
-              )}
+              <iframe
+                src={previewUrl}
+                width="100%"
+                height="500px"
+                title="PDF Preview"
+              />
             </ModalBody>
-            <ModalFooter>
-              <Button onClick={() => setPreviewPdf(null)}>Close</Button>
-            </ModalFooter>
           </ModalContent>
         </Modal>
       </div>

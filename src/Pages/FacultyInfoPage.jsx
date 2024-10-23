@@ -1,4 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { db } from '../firebase/firebase'; // Ensure the path is correct
+import {
+  collection,
+  addDoc,
+  getDocs,
+  serverTimestamp,
+  doc,
+  getDoc,
+  deleteDoc,
+  updateDoc,
+} from 'firebase/firestore';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
 import {
   Box,
   Button,
@@ -16,11 +28,10 @@ import {
   Text,
   ScaleFade,
 } from '@chakra-ui/react';
-import FloatingNav from '../components/Navbar/Navbar';
-import { navItems } from '../constants';
 
-const FacultyInfopage = () => {
+const FacultyInfoPage = () => {
   const [facultyData, setFacultyData] = useState({
+    id: '',
     name: '',
     contactNumber: '',
     additionalInfo: '',
@@ -29,7 +40,38 @@ const FacultyInfopage = () => {
   const [imagePreview, setImagePreview] = useState(null);
   const [facultyList, setFacultyList] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const toast = useToast();
+
+  useEffect(() => {
+    const fetchFaculty = async () => {
+      const facultyCollection = collection(db, 'faculty');
+      const facultySnapshot = await getDocs(facultyCollection);
+      const facultyDataList = facultySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setFacultyList(facultyDataList);
+    };
+
+    const checkAdminRole = async () => {
+      const auth = getAuth();
+      onAuthStateChanged(auth, async (user) => {
+        if (user) {
+          const userDocRef = doc(db, 'users', user.uid);
+          const userDocSnap = await getDoc(userDocRef);
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data();
+            setIsAdmin(userData.role === 'admin'); // Set admin status
+          }
+        }
+      });
+    };
+
+    fetchFaculty();
+    checkAdminRole();
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -47,13 +89,13 @@ const FacultyInfopage = () => {
     }
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!facultyData.name || !facultyData.contactNumber) {
+    if (!isAdmin) {
       toast({
         title: 'Error',
-        description: "Name and contact number are required.",
+        description: 'You do not have permission to perform this action.',
         status: 'error',
         duration: 3000,
         isClosable: true,
@@ -61,59 +103,155 @@ const FacultyInfopage = () => {
       return;
     }
 
-    const newFacultyMember = {
-      ...facultyData,
-      imageFile,
-      imagePreview,
-    };
+    if (!facultyData.name || !facultyData.contactNumber) {
+      toast({
+        title: 'Error',
+        description: 'Name and contact number are required.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
 
-    // Add new faculty member to the top of the list
-    setFacultyList((prevList) => [newFacultyMember, ...prevList]);
-    toast({
-      title: 'Faculty Information Submitted',
-      description: "The faculty information has been submitted successfully.",
-      status: 'success',
-      duration: 3000,
-      isClosable: true,
-    });
+    try {
+      if (editing) {
+        await updateDoc(doc(db, 'faculty', facultyData.id), {
+          name: facultyData.name,
+          contactNumber: facultyData.contactNumber,
+          additionalInfo: facultyData.additionalInfo,
+          timestamp: serverTimestamp(),
+        });
 
-    // Reset form after submission
+        toast({
+          title: 'Faculty Information Updated',
+          description: 'The faculty information has been updated successfully.',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+      } else {
+        await addDoc(collection(db, 'faculty'), {
+          name: facultyData.name,
+          contactNumber: facultyData.contactNumber,
+          additionalInfo: facultyData.additionalInfo,
+          timestamp: serverTimestamp(),
+        });
+
+        toast({
+          title: 'Faculty Information Submitted',
+          description: 'The faculty information has been submitted successfully.',
+          status: 'success',
+          duration: 3000,
+          isClosable: true,
+        });
+      }
+
+      setFacultyData({
+        id: '',
+        name: '',
+        contactNumber: '',
+        additionalInfo: '',
+      });
+      setImageFile(null);
+      setImagePreview(null);
+      setShowForm(false);
+      setEditing(false);
+
+      // Refresh faculty list
+      const facultyCollection = collection(db, 'faculty');
+      const facultySnapshot = await getDocs(facultyCollection);
+      const facultyDataList = facultySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      setFacultyList(facultyDataList);
+    } catch (error) {
+      console.error('Error adding/updating document: ', error);
+      toast({
+        title: 'Error',
+        description: 'There was an error submitting the faculty information.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!isAdmin) {
+      toast({
+        title: 'Error',
+        description: 'You do not have permission to perform this action.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+      return;
+    }
+
+    try {
+      await deleteDoc(doc(db, 'faculty', id));
+      setFacultyList((prevList) => prevList.filter((faculty) => faculty.id !== id));
+      toast({
+        title: 'Faculty Information Deleted',
+        description: 'The faculty information has been deleted successfully.',
+        status: 'success',
+        duration: 3000,
+        isClosable: true,
+      });
+    } catch (error) {
+      console.error('Error deleting document: ', error);
+      toast({
+        title: 'Error',
+        description: 'There was an error deleting the faculty information.',
+        status: 'error',
+        duration: 3000,
+        isClosable: true,
+      });
+    }
+  };
+
+  const handleEdit = (faculty) => {
     setFacultyData({
-      name: '',
-      contactNumber: '',
-      additionalInfo: '',
+      id: faculty.id,
+      name: faculty.name,
+      contactNumber: faculty.contactNumber,
+      additionalInfo: faculty.additionalInfo,
     });
-    setImageFile(null);
-    setImagePreview(null);
-    setShowForm(false); // Hide form after submission
+    setImagePreview(faculty.imagePreview);
+    setShowForm(true);
+    setEditing(true);
   };
 
   return (
     <div>
-      <FloatingNav navItems={navItems} />
       <Box
         width="100%"
-        height="100vh" // Set to 100vh for full screen height
+        height="100vh"
         bg="black"
         borderRadius="10px"
         boxShadow="lg"
         p={5}
         mt={0}
         mx="auto"
-        overflowY="auto" // Allow scrolling for content overflow
+        overflowY="auto"
       >
         <Heading as="h2" textAlign="center" mb={4}>
           Faculty Information
         </Heading>
-        <Button
-          colorScheme="teal"
-          onClick={() => setShowForm(!showForm)}
-          mb={4}
-        >
-          {showForm ? 'Hide Form' : 'Add Faculty Information'}
-        </Button>
 
-        {showForm && (
+        {isAdmin && (
+          <Button
+            colorScheme="teal"
+            onClick={() => setShowForm(!showForm)}
+            mb={4}
+          >
+            {showForm ? 'Hide Form' : 'Add Faculty Information'}
+          </Button>
+        )}
+
+        {isAdmin && showForm && (
           <form onSubmit={handleSubmit}>
             <FormControl mb={4} isRequired>
               <FormLabel>Name</FormLabel>
@@ -156,14 +294,14 @@ const FacultyInfopage = () => {
               )}
             </FormControl>
             <Button type="submit" colorScheme="teal" width="full">
-              Submit
+              {editing ? 'Update Faculty' : 'Submit'}
             </Button>
           </form>
         )}
 
         <SimpleGrid columns={1} spacing={4} mt={5}>
-          {facultyList.map((faculty, index) => (
-            <ScaleFade key={index} initialScale={0.9} in={true}>
+          {facultyList.map((faculty) => (
+            <ScaleFade key={faculty.id} initialScale={0.9} in={true}>
               <Card variant="outline" mb={4} boxShadow="md" borderRadius="md">
                 <CardBody>
                   <Flex align="center">
@@ -184,6 +322,23 @@ const FacultyInfopage = () => {
                         <Text fontSize="sm" mt={1}>{faculty.additionalInfo}</Text>
                       )}
                     </Box>
+                    {isAdmin && (
+                      <Flex ml="auto">
+                        <Button
+                          colorScheme="blue"
+                          onClick={() => handleEdit(faculty)}
+                          mr={2}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          colorScheme="red"
+                          onClick={() => handleDelete(faculty.id)}
+                        >
+                          Delete
+                        </Button>
+                      </Flex>
+                    )}
                   </Flex>
                 </CardBody>
               </Card>
@@ -195,4 +350,4 @@ const FacultyInfopage = () => {
   );
 };
 
-export default FacultyInfopage;
+export default FacultyInfoPage;

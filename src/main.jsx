@@ -9,14 +9,14 @@ import "./index.css";
 const styles = {
   global: (props) => ({
     body: {
-      bg: mode("gray.100", "#000")(props),
-      color: mode("gray.800", "whiteAlpha.900")(props),
+      bg: mode("white", "white")(props),
+      color: mode("gray.800", "gray.800")(props),
     },
   }),
 };
 
 const config = {
-  initialColorMode: "dark",
+  initialColorMode: "light",
   useSystemColorMode: false,
 };
 

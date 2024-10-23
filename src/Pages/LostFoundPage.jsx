@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Box,
   Button,
@@ -28,8 +28,9 @@ const LostFoundPage = () => {
   const [imagePreview, setImagePreview] = useState(null);
   const [capturedImage, setCapturedImage] = useState(null);
   const [isFormVisible, setIsFormVisible] = useState(true);
-  const videoRef = useRef(null);
-  const canvasRef = useRef(null);
+  const videoRef = useRef(null); // Video reference for the camera
+  const canvasRef = useRef(null); // Canvas reference to capture photo
+
   const { isOpen, onOpen, onClose } = useDisclosure();
   const [imageModal, setImageModal] = useState({ isOpen: false, imageUrl: null });
   const toast = useToast();
@@ -117,33 +118,60 @@ const LostFoundPage = () => {
     }
   };
 
-  const startCamera = () => {
-    navigator.mediaDevices
-      .getUserMedia({ video: true })
-      .then((stream) => {
+  // Function to start the camera
+  const startCamera = async () => {
+    try {
+      if (videoRef.current) {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
-        onOpen();
-      })
-      .catch((err) => {
-        console.error("Error accessing camera: ", err);
-        toast({
-          title: "Camera Access Denied",
-          description: "Please allow camera access to take a photo.",
-          status: "error",
-          duration: 3000,
-          isClosable: true,
-        });
+
+        // Wait for the video to be ready to play
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current.play();
+          console.log("Camera stream started.");
+        };
+      }
+    } catch (err) {
+      console.error("Error accessing camera:", err);
+      toast({
+        title: "Camera Access Denied",
+        description: "Please allow camera access to capture photos.",
+        status: "error",
+        duration: 3000,
+        isClosable: true,
       });
+    }
   };
-  <video ref={videoRef} width="100%" height="auto" />
 
   const capturePhoto = () => {
-    const context = canvasRef.current.getContext("2d");
-    context.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
-    const imageDataUrl = canvasRef.current.toDataURL("image/png");
-    setCapturedImage(imageDataUrl);
-    onClose();
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+
+    if (!video || !canvas) {
+      console.error("Video or canvas element is not available.");
+      return;
+    }
+
+    // Set the canvas size to match the video stream size
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+
+    const context = canvas.getContext("2d");
+
+    // Draw the video frame to the canvas
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    // Get the image as a data URL
+    const imageDataUrl = canvas.toDataURL("image/png");
+    console.log("Captured Image Data URL: ", imageDataUrl);
+
+    if (imageDataUrl) {
+      setCapturedImage(imageDataUrl);
+      onClose(); // Close the modal after capturing the photo
+      console.log("Photo captured successfully.");
+    } else {
+      console.error("Failed to capture photo.");
+    }
   };
 
   const toggleFormVisibility = () => {
@@ -236,26 +264,25 @@ const LostFoundPage = () => {
                   <IconButton
                     icon={<AiOutlinePaperClip />}
                     size="lg"
-                    aria-label="Attach File"
-                    cursor="pointer"
+                    aria-label="Attach Image"
                     as="span"
                   />
                 </label>
                 <Input
+                  id="file-upload"
                   type="file"
                   accept="image/*"
-                  id="file-upload"
-                  style={{ display: "none" }}
                   onChange={handleFileChange}
+                  display="none"
                 />
                 <IconButton
                   icon={<AiOutlineCamera />}
                   size="lg"
                   aria-label="Open Camera"
-                  onClick={startCamera}
+                  onClick={onOpen}
                 />
-                <Button colorScheme="teal" type="submit" ml={3}>
-                  Post
+                <Button type="submit" colorScheme="teal">
+                  Post Message
                 </Button>
               </Flex>
             </FormControl>
@@ -264,13 +291,13 @@ const LostFoundPage = () => {
       </Box>
 
       {/* Camera Modal */}
-      <Modal isOpen={isOpen} onClose={onClose}>
+      <Modal isOpen={isOpen} onClose={onClose} size="xl">
         <ModalOverlay />
         <ModalContent>
-          <ModalHeader>Capture Photo</ModalHeader>
+          <ModalHeader>Capture a Photo</ModalHeader>
           <ModalBody>
-            <video ref={videoRef} width="100%" height="auto" />
-            <canvas ref={canvasRef} style={{ display: "none" }} width="640" height="480"></canvas>
+            <video ref={videoRef} autoPlay playsInline style={{ width: "100%" }}></video>
+            <canvas ref={canvasRef} style={{ display: "none" }}></canvas>
           </ModalBody>
           <ModalFooter>
             <Button colorScheme="teal" onClick={capturePhoto}>
@@ -283,19 +310,13 @@ const LostFoundPage = () => {
         </ModalContent>
       </Modal>
 
-      {/* Image Zoom Modal */}
+      {/* Image Modal */}
       <Modal isOpen={imageModal.isOpen} onClose={closeImageModal}>
         <ModalOverlay />
-        <ModalContent maxW="90%">
-          <ModalHeader>Image Preview</ModalHeader>
+        <ModalContent>
           <ModalBody>
-            <Image src={imageModal.imageUrl} alt="Full-Size Image" width="100%" height="auto" />
+            {imageModal.imageUrl && <Image src={imageModal.imageUrl} alt="Full View" />}
           </ModalBody>
-          <ModalFooter>
-            <Button variant="ghost" onClick={closeImageModal}>
-              Close
-            </Button>
-          </ModalFooter>
         </ModalContent>
       </Modal>
     </Flex>

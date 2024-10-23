@@ -91,12 +91,13 @@ import {
       },
   ];
   
-  export const navItems = [
-    { name: "Home", link: "/",  },
-    { name: "Compliant", link: "/about" },
+  const navItems = [
+    { name: "Home", link: "/" },
+    { name: "Compliant", link: "/complaint" },
     { name: "Ai Chatbot", link: "/contact" },
-    { name: "MyProfile", link: "/contact"}
-  ];
+    { name: "MyProfile", link: "/contact" }
+];
+export default navItems;
  export const lecVideos =[
     
         {
