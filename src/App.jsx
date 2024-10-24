@@ -2,23 +2,24 @@ import { doc, getDoc } from "firebase/firestore";
 import { useEffect, useState } from "react";
 import { useAuthState } from "react-firebase-hooks/auth";
 import { Navigate, Route, Routes } from "react-router-dom";
+import Signup from "./components/AuthForm/Signup.jsx";
+import Phixy from "./components/ChatBot/Phixy.jsx";
+import Complaint from "./components/Complaint/Complaint.jsx";
+import ResetPassword from "./components/ResetPassword.jsx";
 import CreatePost from "./components/Sidebar/CreatePost";
 import { auth, firestore } from "./firebase/firebase";
 import PageLayout from "./Layouts/PageLayout/PageLayout";
 import AdminPage from "./pages/AdminPage/AdminPage";
 import AuthPage from "./Pages/AuthPage/Authpage.jsx";
-import HomePage from "./pages/HomePage/HomePage";
-// import ProfilePage from "./pages/ProfilePage/ProfilePage";
 import FacultyInfoPage from "./Pages/FacultyInfoPage";
 import ForumsPage from "./Pages/ForumsPage";
+import HomePage from "./pages/HomePage/HomePage";
 import LectureVideosPage from "./Pages/LectureVideosPage.jsx";
 import LostFoundPage from "./Pages/LostFoundPage";
 import MockTestPage from "./Pages/MockTestPage";
 import NotesPage from "./Pages/NotesPage";
 import PreviousPaperPage from "./Pages/PreviousPaperPage";
-import Complaint from "./components/Complaint/Complaint.jsx";
-import ResetPassword from "./components/ResetPassword.jsx";
-import Signup from "./components/AuthForm/Signup.jsx";
+import ProfilePage from "./pages/ProfilePage/ProfilePage";
 
 function App() {
   const [authUser] = useAuthState(auth);
@@ -30,15 +31,20 @@ function App() {
       if (authUser) {
         const userRef = doc(firestore, "users", authUser.uid);
         const userSnap = await getDoc(userRef);
-        
+
         if (userSnap.exists()) {
           const userData = userSnap.data();
           console.log("User data:", userData); // Log user data
           const adminStatus = userData.isAdmin === true;
-          console.log("Admin status for user:", authUser.uid, "is", adminStatus);
+          console.log(
+            "Admin status for user:",
+            authUser.uid,
+            "is",
+            adminStatus
+          );
           setIsAdmin(adminStatus);
         } else {
-          console.error("User document does not exist."); 
+          console.error("User document does not exist.");
         }
       }
       setIsLoading(false);
@@ -86,14 +92,22 @@ function App() {
             )
           }
         />
-        <Route path="/signup" element={<Signup />} /> 
-          <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/createpost" element={<CreatePost />} />
-        {/* <Route path="/:username" element={<ProfilePage />} /> */}
-        <Route path="/notespage" element={<NotesPage />} />
+        <Route path="/:username" element={<ProfilePage />} />
+        <Route path="/notespage" element={<NotesPage isAdmin={isAdmin} />} />
         <Route path="/forum" element={<ForumsPage />} />
-        <Route path="/faculty" element={<FacultyInfoPage isAdmin={isAdmin} />} />
-        <Route path="/lecturevideos" element={<LectureVideosPage isAdmin={isAdmin} />} />
+        <Route path="/phixy" element={<Phixy />} />
+
+        <Route
+          path="/faculty"
+          element={<FacultyInfoPage isAdmin={isAdmin} />}
+        />
+        <Route
+          path="/lecturevideos"
+          element={<LectureVideosPage isAdmin={isAdmin} />}
+        />
         <Route path="/lostandfound" element={<LostFoundPage />} />
         <Route path="/mocktest" element={<MockTestPage isAdmin={isAdmin} />} />
         <Route path="/previouspaper" element={<PreviousPaperPage />} />

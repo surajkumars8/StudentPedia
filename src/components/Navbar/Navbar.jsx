@@ -1,8 +1,8 @@
-import React from "react";
 import { motion } from "framer-motion";
+
 import { Link } from "react-router-dom"; // Use React Router for navigation
 // import Toggle from "./ThemeToggle"; // Assuming you have a theme toggle component
-import classnames from 'classnames'; // Custom utility for conditional classnames
+import classnames from "classnames"; // Custom utility for conditional classnames
 
 export const FloatingNav = ({ navItems, className }) => {
   return (
@@ -32,16 +32,17 @@ export const FloatingNav = ({ navItems, className }) => {
         left: "10%",
         // Center horizontally
         transform: "translateX(-50%)", // Adjust for centering
-      }}
-    >
+      }}>
       {navItems.map((navItem, idx) => (
         <Link
           key={`link-${idx}`}
           to={navItem.link} // React Router's 'to' attribute
           className={classnames(
-            "relative dark:text-neutral-50 items-center flex space-x-1 text-neutral-600 dark:hover:text-neutral-300 hover:text-neutral-500"
-          )}
-        >
+            "relative dark:text-neutral-50 items-center flex space-x-1 text-neutral-600 dark:hover:text-neutral-300 hover:text-neutral-500",
+            {
+              "active: active:text-yellow-500": true, // Adds yellow underline when active
+            }
+          )}>
           <span className="block sm:hidden">{navItem.icon}</span>
           <span className="text-sm !cursor-pointer">{navItem.name}</span>
         </Link>

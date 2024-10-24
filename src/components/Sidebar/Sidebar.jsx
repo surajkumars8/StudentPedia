@@ -1,28 +1,17 @@
-import {
-  Box,
-  Button,
-  Flex,
-  Link,
-  Tooltip,
-  useDisclosure,
-} from "@chakra-ui/react";
+import { Box, Button, Flex, Link, Tooltip } from "@chakra-ui/react";
 import { Link as RouterLink } from "react-router-dom";
+// import { InstagramLogo, InstagramMobileLogo } from "../../assets/constants";
+
 import { BiLogOut } from "react-icons/bi";
-import { IoMdInformationCircleOutline } from "react-icons/io";
-import { BsFillImageFill } from "react-icons/bs";  // For the Create button icon
 import useLogout from "../../hooks/useLogout";
-import SidebarItems from "./SidebarItems";
-import CreatePost from "./CreatePost";  // Import the CreatePost component
+import Sidepage from "./sidepage";
 
 const Sidebar = () => {
   const { handleLogout, isLoggingOut } = useLogout();
-  const { isOpen: isAboutOpen, onOpen: onAboutOpen, onClose: onAboutClose } = useDisclosure();
-  const { isOpen: isCreateOpen, onOpen: onCreateOpen, onClose: onCreateClose } = useDisclosure();
-
   return (
     <Box
       height={"100vh"}
-      borderRight={"1px solid "}
+      borderRight={"1px solid"}
       borderColor={"whiteAlpha.300"}
       py={8}
       position={"sticky"}
@@ -36,36 +25,35 @@ const Sidebar = () => {
           pl={2}
           display={{ base: "none", md: "block" }}
           cursor="pointer">
-          {/* Add your logo or brand image here */}
+          <img
+            src="/public/assets/logoname.png"
+            alt="logo"
+            height={144}
+            width={144}
+          />
         </Link>
-
+        {/* mobile logo */}
+        <Link
+          to={"/"}
+          as={RouterLink}
+          p={2}
+          display={{ base: "block", md: "none" }}
+          borderRadius={6}
+          _hover={{
+            bg: "whiteAlpha.200",
+          }}
+          w={10}
+          cursor="pointer">
+          <img
+            src="/public/assets/logo.png"
+            alt="logo"
+            height={79}
+            width={79}
+          />
+        </Link>
         <Flex direction={"column"} gap={5} cursor={"pointer"}>
-          <SidebarItems />
+          <Sidepage />
         </Flex>
-
-        {/* Create Button */}
-        {/* <Tooltip
-          hasArrow
-          label={"Create"}
-          placement="right"
-          ml={1}
-          openDelay={500}
-          display={{ base: "block", md: "none" }}>
-          <Flex
-            alignItems={"center"}
-            gap={4}
-            _hover={{ bg: "whiteAlpha.400" }}
-            borderRadius={6}
-            p={2}
-            w={{ base: 10, md: "full" }}
-            justifyContent={{ base: "center", md: "flex-start" }}
-            onClick={onCreateOpen}>
-            <BsFillImageFill size={24} />
-            <Box display={{ base: "none", md: "block" }}>Create</Box>
-          </Flex>
-        </Tooltip> */}
-
-        {/* About Button */}
 
         {/* LOGOUT */}
         <Tooltip
@@ -79,7 +67,7 @@ const Sidebar = () => {
             onClick={handleLogout}
             alignItems={"center"}
             gap={4}
-            _hover={{ bg: "whiteAlpha.400" }}
+            _hover={{ bg: "transparent", color: "red" }}
             borderRadius={6}
             p={2}
             w={{ base: 10, md: "full" }}
@@ -89,7 +77,8 @@ const Sidebar = () => {
             <Button
               display={{ base: "none", md: "block" }}
               variant={"ghost"}
-              _hover={{ bg: "transparent" }}
+              color={"black"}
+              _hover={{ bg: "transparent", color: "red" }}
               isLoading={isLoggingOut}>
               Logout
             </Button>
