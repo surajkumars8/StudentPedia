@@ -9,17 +9,17 @@ import ResetPassword from "./components/ResetPassword.jsx";
 import CreatePost from "./components/Sidebar/CreatePost";
 import { auth, firestore } from "./firebase/firebase";
 import PageLayout from "./Layouts/PageLayout/PageLayout";
-import AdminPage from "./pages/AdminPage/AdminPage";
+import AdminPage from "./Pages/AdminPage/AdminPage";
 import AuthPage from "./Pages/AuthPage/Authpage.jsx";
 import FacultyInfoPage from "./Pages/FacultyInfoPage";
 import ForumsPage from "./Pages/ForumsPage";
-import HomePage from "./pages/HomePage/HomePage";
-import LectureVideosPage from "./pages/LectureVideosPage.jsx";
+import HomePage from "./Pages/HomePage/HomePage";
+import LectureVideosPage from "./Pages/LectureVideosPage.jsx";
 import LostFoundPage from "./Pages/LostFoundPage";
 import MockTestPage from "./Pages/MockTestPage";
 import NotesPage from "./Pages/NotesPage";
 import PreviousPaperPage from "./Pages/PreviousPaperPage";
-import ProfilePage from "./pages/ProfilePage/ProfilePage";
+import ProfilePage from "./Pages/ProfilePage/ProfilePage";
 
 function App() {
   const [authUser] = useAuthState(auth);
