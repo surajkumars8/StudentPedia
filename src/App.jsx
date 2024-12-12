@@ -13,7 +13,7 @@ import AdminPage from "./Pages/AdminPage/AdminPage";
 import AuthPage from "./Pages/AuthPage/Authpage.jsx";
 import FacultyInfoPage from "./Pages/FacultyInfoPage";
 import ForumsPage from "./Pages/ForumsPage";
-import HomePage from "./Pages/HomePage/HomePage";
+import HomePage from "./Pages/HomePage/Homepage";
 import LectureVideosPage from "./Pages/LectureVideosPage.jsx";
 import LostFoundPage from "./Pages/LostFoundPage";
 import MockTestPage from "./Pages/MockTestPage";
