@@ -26,10 +26,10 @@ const Sidebar = () => {
           display={{ base: "none", md: "block" }}
           cursor="pointer">
           <img
-            src="/public/assets/logoname.png"
+            src="/public/assets/Group 205.png"
             alt="logo"
-            height={144}
-            width={144}
+            height={150}
+            width={150}
           />
         </Link>
         {/* mobile logo */}

@@ -59,10 +59,10 @@ const Sidepage = () => {
               onMouseEnter={() => setIsHovered(true)}
               onMouseLeave={() => setIsHovered(false)}
               transition="background-color 0.1s"
-              _hover={{ bg: "transparent", color: "yellow.200" }} // Gray on hover
+              _hover={{ bg: "transparent", color: "#B9E97D" }} // Gray on hover
               bg={
                 isActive
-                  ? "yellow.300"
+                  ? "#B9E97D"
                   : isHovered
                   ? "transparent"
                   : "transparent"

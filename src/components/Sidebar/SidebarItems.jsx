@@ -1,5 +1,4 @@
 
-import CreatePost from "./CreatePost";
 import FacultyInfo from "./FacultyInfo";
 import Forums from "./Forums";
 

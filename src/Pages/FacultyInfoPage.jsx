@@ -1,379 +1,308 @@
 import React, { useState, useEffect } from 'react';
-import {
-  Button,
-  Card,
-  CardBody,
-  CardFooter,
-  CardHeader,
-  Heading,
-  Text,
-  Modal,
-  ModalOverlay,
-  ModalContent,
-  ModalHeader,
-  ModalCloseButton,
-  ModalBody,
-  ModalFooter,
-  Input,
-  useToast,
-  Image,
-} from '@chakra-ui/react';
-import { getAuth } from 'firebase/auth';
-import useAuthStore from '../store/authStore';
-import { firestore, storage } from '../firebase/firebase';
-import { collection, addDoc, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { Button, Card, CardBody, CardFooter, CardHeader, Heading, SimpleGrid, Text, Input, Box, Flex, Spinner, IconButton, Modal, ModalOverlay, ModalContent, ModalHeader, ModalCloseButton, ModalBody, ModalFooter, useDisclosure } from '@chakra-ui/react';
+import { AddIcon } from '@chakra-ui/icons';
+import { db, storage } from '../firebase/firebase';
+import { collection, addDoc, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-const FacultyPage = () => {
-  const user = useAuthStore((state) => state.user);
-  const isAdmin = user && user.isAdmin;
+const FacultyPage = ({ isAdmin }) => {
+  const [faculty, setFaculty] = useState([]);
+  const [newFaculty, setNewFaculty] = useState({ name: '', description: '', photo: null });
+  const [isEditing, setIsEditing] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadComplete, setUploadComplete] = useState(false);
+  const [isFormVisible, setIsFormVisible] = useState(false);
+  const [selectedFaculty, setSelectedFaculty] = useState(null);
 
-  const [isOpen, setIsOpen] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [currentFacultyId, setCurrentFacultyId] = useState(null);
-  const [newName, setNewName] = useState('');
-  const [newPosition, setNewPosition] = useState('');
-  const [newDepartment, setNewDepartment] = useState('');
-  const [facultyList, setFacultyList] = useState([]);
-  const [imageFile, setImageFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState('');
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const toast = useToast();
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   useEffect(() => {
-    const fetchFaculty = async () => {
+    const unsubscribe = onSnapshot(collection(db, 'faculty'), (snapshot) => {
+      const facultyList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setFaculty(facultyList);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Error fetching faculty: ", error);
+    });
+
+    return () => unsubscribe();
+  }, [isAdmin]);
+
+  const uploadFileToStorage = async (file) => {
+    const uniqueFileName = `faculty/${Date.now()}_${file.name}`;
+    const storageRef = ref(storage, uniqueFileName);
+    await uploadBytes(storageRef, file);
+    return await getDownloadURL(storageRef);
+  };
+
+  const handleAddFaculty = async (e) => {
+    e.preventDefault();
+
+    if (newFaculty.name.trim() && newFaculty.description.trim() && newFaculty.photo) {
+      setIsUploading(true);
+
       try {
-        const facultyCollection = collection(firestore, 'faculty');
-        const facultySnapshot = await getDocs(facultyCollection);
-        const facultyList = facultySnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        setFacultyList(facultyList);
+        const photoUrl = await uploadFileToStorage(newFaculty.photo);
+
+        const facultyData = {
+          name: newFaculty.name,
+          description: newFaculty.description,
+          photo: photoUrl,
+        };
+
+        await addDoc(collection(db, 'faculty'), facultyData);
+        setNewFaculty({ name: '', description: '', photo: null });
+        setUploadComplete(true);
       } catch (error) {
-        console.error('Error fetching faculty:', error);
-        toast({
-          title: 'Error fetching faculty',
-          description: 'Failed to load faculty from Firestore. Check your permissions.',
-          status: 'error',
-          duration: 3000,
-          isClosable: true,
-        });
+        console.error("Error adding faculty: ", error);
       }
-    };
 
-    fetchFaculty();
-  }, []);
-
-  const checkAuth = () => {
-    const auth = getAuth();
-    const currentUser = auth.currentUser;
-    return currentUser;
+      setIsUploading(false);
+      setIsFormVisible(false);
+    } else {
+      alert('Please fill in all fields.');
+    }
   };
 
-  const handleAddFaculty = async () => {
-    if (!isAdmin) {
-      toast({
-        title: 'Unauthorized',
-        description: 'Only admins can add faculty.',
-        status: 'warning',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
+  useEffect(() => {
+    if (uploadComplete) {
+      setNewFaculty({ name: '', description: '', photo: null });
+      setUploadComplete(false);
     }
+  }, [uploadComplete]);
 
-    const currentUser = checkAuth();
-    if (!currentUser) {
-      toast({
-        title: 'Unauthorized',
-        description: 'You must be logged in to add faculty.',
-        status: 'warning',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
-
-    if (!imageFile) {
-      toast({
-        title: 'Image Required',
-        description: 'Please upload an image before adding faculty information.',
-        status: 'warning',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
-
-    setLoading(true);
+  const handleDeleteFaculty = async (id) => {
+    setFaculty((prevFaculty) => prevFaculty.filter(fac => fac.id !== id));
 
     try {
-      const uniqueFileName = `faculty/${Date.now()}_${imageFile.name}`;
-      const storageRef = ref(storage, uniqueFileName);
-      await uploadBytes(storageRef, imageFile);
-      const downloadURL = await getDownloadURL(storageRef);
-
-      const newFaculty = {
-        name: newName,
-        position: newPosition,
-        department: newDepartment,
-        imageUrl: downloadURL,
-      };
-
-      const docRef = await addDoc(collection(firestore, 'faculty'), newFaculty);
-      setFacultyList([...facultyList, { id: docRef.id, ...newFaculty }]);
-
-      toast({
-        title: 'Faculty Added',
-        description: 'Faculty information has been successfully added.',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-      resetForm();
+      await deleteDoc(doc(db, 'faculty', id));
     } catch (error) {
-      console.error('Error adding faculty:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to add faculty. Please try again.',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-    } finally {
-      setLoading(false);
+      console.error("Error deleting faculty: ", error);
     }
   };
 
-  const handleEditFaculty = (facultyId) => {
-    if (!isAdmin) {
-      toast({
-        title: 'Unauthorized',
-        description: 'Only admins can edit faculty.',
-        status: 'warning',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
-
-    const facultyToEdit = facultyList.find((faculty) => faculty.id === facultyId);
-    if (facultyToEdit) {
-      setIsEditMode(true);
-      setCurrentFacultyId(facultyId);
-      setNewName(facultyToEdit.name);
-      setNewPosition(facultyToEdit.position);
-      setNewDepartment(facultyToEdit.department);
-      setIsOpen(true);
-    }
+  const handleEditFaculty = (index) => {
+    setIsEditing(index);
+    setNewFaculty(faculty[index]);
   };
 
-  const handleDeleteFaculty = async (facultyId, e) => {
-    e.stopPropagation(); // Prevent triggering card click
-    if (!isAdmin) {
-      toast({
-        title: 'Unauthorized',
-        description: 'Only admins can delete faculty.',
-        status: 'warning',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
+  const handleSaveEdit = async (index) => {
+    const facultyToUpdate = faculty[index];
+    const updatedFaculty = { ...facultyToUpdate, ...newFaculty };
 
     try {
-      await deleteDoc(doc(firestore, 'faculty', facultyId));
-      const updatedFacultyList = facultyList.filter((faculty) => faculty.id !== facultyId);
-      setFacultyList(updatedFacultyList);
-
-      toast({
-        title: 'Faculty Deleted',
-        description: 'Faculty information has been successfully deleted.',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
+      await setDoc(doc(db, 'faculty', facultyToUpdate.id), updatedFaculty);
+      setFaculty(faculty.map((fac, i) => (i === index ? updatedFaculty : fac)));
+      setIsEditing(null);
+      setNewFaculty({ name: '', description: '', photo: null });
     } catch (error) {
-      console.error('Error deleting faculty:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to delete faculty. Please try again.',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
+      console.error("Error updating faculty: ", error);
     }
   };
 
-  const handleFileChange = (e) => {
-    setImageFile(e.target.files[0]);
+  const handleCardClick = (fac) => {
+    setSelectedFaculty(fac);
+    onOpen();
   };
 
-  const resetForm = () => {
-    setIsOpen(false);
-    setIsEditMode(false);
-    setNewName('');
-    setNewPosition('');
-    setNewDepartment('');
-    setImageFile(null);
-    setCurrentFacultyId(null);
-  };
+  const isValidFaculty = (fac) => fac.name && fac.description && fac.photo;
 
-  const handleCardClick = (imageUrl) => {
-    setPreviewUrl(imageUrl);
-    setIsPreviewOpen(true);
-  };
-
-  const styles = {
-    container: {
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      flexDirection: 'column',
-      padding: '20px',
-      backgroundColor: '#f8f9fa',
-      minHeight: '100vh',
-      width: '100%',
-    },
-    mainContent: {
-      width: '100%',
-      maxWidth: '1200px',
-      backgroundColor: '#ffffff',
-      borderRadius: '8px',
-      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
-      padding: '20px',
-      marginTop: '20px',
-    },
-    cardContainer: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-      gap: '20px',
-      marginTop: '20px',
-      width: '100%',
-    },
-    card: {
-      position: 'relative',
-      cursor: 'pointer',
-      transition: 'transform 0.2s',
-      boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
-      borderRadius: '8px',
-      background: '#fff',
-      padding: '16px',
-      color: '#000',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'space-between',
-    },
-    actionButtons: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      marginTop: '10px',
-    },
-    addButton: {
-      position: 'fixed',
-      bottom: '20px',
-      right: '20px',
-      backgroundColor: '#007bff',
-      color: 'white',
-      borderRadius: '50%',
-      width: '56px',
-      height: '56px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontSize: '24px',
-      boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
-      cursor: 'pointer',
-      transition: 'transform 0.2s',
-    },
-  };
+  if (isLoading) {
+    return <div style={{ textAlign: 'center', marginTop: '50px' }}><Spinner size="xl" /></div>;
+  }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.mainContent}>
-        <Heading as="h1" size="xl" textAlign="center">
-          Faculty Information
-        </Heading>
+    <div style={{ padding: '20px', backgroundColor: '#f7f7f7', minHeight: '100vh' }}>
+      <Heading as="h1" size="xl" mb={10} textAlign="left" color="#333">
+        Faculty
+      </Heading>
 
-        <div style={styles.cardContainer}>
-          {facultyList.map((faculty) => (
-            <Card key={faculty.id} style={styles.card} onClick={() => handleCardClick(faculty.imageUrl)}>
-              <CardHeader>
-                <Heading size="md">{faculty.name}</Heading>
-                <Text>{faculty.position}</Text>
-                <Text>{faculty.department}</Text>
-              </CardHeader>
-              <CardBody>
-                <Image
-                  src={faculty.imageUrl}
-                  alt={faculty.name}
-                  style={{ width: '100%', height: 'auto', borderRadius: '8px' }}
+      <SimpleGrid columns={[1, 2, 3]} spacing={10}>
+        {faculty.filter(isValidFaculty).map((fac, index) => (
+          <Card
+            key={fac.id}
+            maxW="sm"
+            p={4}
+            bg="white"
+            shadow="md"
+            _hover={{ shadow: 'xl' }}
+            position="relative"
+            onClick={() => handleCardClick(fac)}
+            cursor="pointer"
+          >
+            <CardHeader>
+              {isAdmin && isEditing === index ? (
+                <Input
+                  value={newFaculty.name}
+                  onChange={(e) => setNewFaculty({ ...newFaculty, name: e.target.value })}
+                  placeholder="Edit faculty name"
+                  bg="white"
+                  color="#333"
+                  border="1px solid #ddd"
                 />
-              </CardBody>
-              {isAdmin && (
-                <CardFooter style={styles.actionButtons}>
-                  <Button size="sm" colorScheme="blue" onClick={(e) => { e.stopPropagation(); handleEditFaculty(faculty.id); }}>
+              ) : (
+                <Heading size="md" color="#333">{fac.name}</Heading>
+              )}
+            </CardHeader>
+
+            <CardBody>
+              {isAdmin && isEditing === index ? (
+                <>
+                  <Input
+                    value={newFaculty.description}
+                    onChange={(e) => setNewFaculty({ ...newFaculty, description: e.target.value })}
+                    placeholder="Edit description"
+                    bg="white"
+                    color="#333"
+                    border="1px solid #ddd"
+                    mb={2}
+                  />
+                  <Input
+                    type="file"
+                    onChange={(e) => setNewFaculty({ ...newFaculty, photo: e.target.files[0] })}
+                    placeholder="Edit photo"
+                    bg="white"
+                    color="#333"
+                    border="1px solid #ddd"
+                  />
+                </>
+              ) : (
+                <>
+                  <img src={fac.photo} alt={fac.name} style={{ width: '100%', borderRadius: '8px' }} />
+                  <Text color="#555" mt={2}>{fac.description}</Text>
+                </>
+              )}
+            </CardBody>
+
+            <CardFooter>
+              {isAdmin && isEditing === index ? (
+                <Button 
+                colorScheme="green" 
+                onClick={(e) => { 
+                  e.stopPropagation();  // Prevents modal from opening
+                  handleSaveEdit(index); 
+                }}
+              >
+                Save
+              </Button>
+              ) : null}
+
+              {isAdmin && !isEditing && (
+                <Flex position="absolute" top="5px" right="5px" gap="5px">
+                  <Button size="xs" colorScheme="blue" onClick={(e) => { e.stopPropagation(); handleEditFaculty(index); }}>
                     Edit
                   </Button>
-                  <Button size="sm" colorScheme="red" onClick={(e) => handleDeleteFaculty(faculty.id, e)}>
+                  <Button size="xs" colorScheme="red" onClick={(e) => { e.stopPropagation(); handleDeleteFaculty(fac.id); }}>
                     Delete
                   </Button>
-                </CardFooter>
+                </Flex>
               )}
-            </Card>
-          ))}
-        </div>
-      </div>
+            </CardFooter>
+          </Card>
+        ))}
+      </SimpleGrid>
 
       {isAdmin && (
-        <div style={styles.addButton} onClick={() => setIsOpen(true)}>
-          +
-        </div>
+        <IconButton
+          aria-label="Add faculty"
+          icon={<AddIcon />}
+          colorScheme="blue"
+          onClick={() => setIsFormVisible(!isFormVisible)}
+          position="fixed"
+          bottom="20px"
+          right="20px"
+          borderRadius="full"
+          boxShadow="lg"
+          size="lg"
+        />
       )}
 
-      <Modal isOpen={isOpen} onClose={resetForm}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>{isEditMode ? 'Edit Faculty' : 'Add Faculty'}</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <Input
-              placeholder="Name"
-              value={newName}
-              onChange={(e) => setNewName(e.target.value)}
-              mb={3}
-            />
-            <Input
-              placeholder="Position"
-              value={newPosition}
-              onChange={(e) => setNewPosition(e.target.value)}
-              mb={3}
-            />
-            <Input
-              placeholder="Department"
-              value={newDepartment}
-              onChange={(e) => setNewDepartment(e.target.value)}
-              mb={3}
-            />
-            <Input type="file" accept="image/*" onChange={handleFileChange} />
-          </ModalBody>
-          <ModalFooter>
-            <Button colorScheme="blue" onClick={handleAddFaculty} isLoading={loading}>
-              {isEditMode ? 'Save Changes' : 'Add Faculty'}
-            </Button>
-            <Button onClick={resetForm}>Cancel</Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
+      {isAdmin && isFormVisible && (
+        <>
+          <Box
+            position="fixed"
+            top="0"
+            left="0"
+            width="100vw"
+            height="100vh"
+            bg="rgba(0, 0, 0, 0.5)"
+            zIndex="999"
+            onClick={() => setIsFormVisible(false)}
+          />
 
-      <Modal isOpen={isPreviewOpen} onClose={() => setIsPreviewOpen(false)} size="xl">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalCloseButton />
-          <ModalBody>
-            <Image src={previewUrl} alt="Faculty Image Preview" />
-          </ModalBody>
-        </ModalContent>
-      </Modal>
+          <Box
+            position="fixed"
+            top="50%"
+            left="50%"
+            transform="translate(-50%, -50%)"
+            bg="white"
+            p={8}
+            borderRadius="lg"
+            shadow="xl"
+            zIndex="1000"
+            width="400px"
+          >
+            <Heading as="h3" size="lg" mb={4} color="#333" textAlign="center">
+              Add New Faculty
+            </Heading>
+            <form onSubmit={handleAddFaculty}>
+              <Input
+                placeholder="Faculty Name"
+                value={newFaculty.name}
+                onChange={(e) => setNewFaculty({ ...newFaculty, name: e.target.value })}
+                mb={2}
+                bg="white"
+                color="#333"
+                border="1px solid #ddd"
+              />
+              <Input
+                placeholder="Description"
+                value={newFaculty.description}
+                onChange={(e) => setNewFaculty({ ...newFaculty, description: e.target.value })}
+                mb={2}
+                bg="white"
+                color="#333"
+                border="1px solid #ddd"
+              />
+              <Input
+                type="file"
+                onChange={(e) => setNewFaculty({ ...newFaculty, photo: e.target.files[0] })}
+                placeholder="Select photo"
+                mb={2}
+                bg="white"
+                color="#333"
+                border="1px solid #ddd"
+              />
+              <Button colorScheme="blue" type="submit" isLoading={isUploading} width="100%">
+                {isUploading ? 'Uploading...' : 'Add Faculty'}
+              </Button>
+            </form>
+          </Box>
+        </>
+      )}
+
+      {selectedFaculty && (
+        <Modal isOpen={isOpen} onClose={onClose} size="xl">
+          <ModalOverlay />
+          <ModalContent>
+            <ModalHeader>{selectedFaculty.name}</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody>
+              <Text mb={4}>{selectedFaculty.description}</Text>
+              <img src={selectedFaculty.photo} alt={selectedFaculty.name} style={{ width: '100%', borderRadius: '8px' }} />
+            </ModalBody>
+            <ModalFooter>
+              <Button colorScheme="blue" mr={3} onClick={onClose}>
+                Close
+              </Button>
+              {/* <Button as="a" href={selectedFaculty.photo} target="_blank" rel="noopener noreferrer">
+                Download Photo
+              </Button> */}
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+      )}
     </div>
   );
 };

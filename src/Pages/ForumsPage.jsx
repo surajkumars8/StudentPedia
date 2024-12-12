@@ -6,7 +6,13 @@ import {
   CardFooter,
   CardHeader,
   Heading,
+  SimpleGrid,
   Text,
+  Input,
+  Box,
+  Flex,
+  Spinner,
+  IconButton,
   Modal,
   ModalOverlay,
   ModalContent,
@@ -14,357 +20,309 @@ import {
   ModalCloseButton,
   ModalBody,
   ModalFooter,
-  Input,
-  useToast,
-  Image,
+  useDisclosure
 } from '@chakra-ui/react';
-import { getAuth } from 'firebase/auth';
-import useAuthStore from '../store/authStore';
-import { firestore, storage } from '../firebase/firebase';
-import { collection, addDoc, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { AddIcon, CloseIcon } from '@chakra-ui/icons';
+import { db, storage } from '../firebase/firebase';
+import { collection, addDoc, deleteDoc, doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
-const ForumPage = () => {
-  const user = useAuthStore((state) => state.user);
-  const isAdmin = user && user.isAdmin;
-
-  const [isOpen, setIsOpen] = useState(false);
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [currentForumId, setCurrentForumId] = useState(null);
-  const [forumName, setForumName] = useState('');
-  const [forumDescription, setForumDescription] = useState('');
-  const [forumList, setForumList] = useState([]);
-  const [imageFile, setImageFile] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState('');
-  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const toast = useToast();
+const ForumPage = ({ isAdmin }) => {
+  const [forums, setForums] = useState([]);
+  const [newForum, setNewForum] = useState({ title: '', content: '', image: null });
+  const [isEditing, setIsEditing] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isUploading, setIsUploading] = useState(false);
+  const [isFormVisible, setIsFormVisible] = useState(false);
+  const [selectedForum, setSelectedForum] = useState(null);
+  const { isOpen, onOpen, onClose } = useDisclosure();
 
   useEffect(() => {
-    const fetchForums = async () => {
+    const unsubscribe = onSnapshot(collection(db, 'forums'), (snapshot) => {
+      const forumList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setForums(forumList);
+      setIsLoading(false);
+    }, (error) => {
+      console.error("Error fetching forums: ", error);
+    });
+
+    return () => unsubscribe();
+  }, [isAdmin]);
+
+  const uploadImageToStorage = async (file) => {
+    const uniqueFileName = `forums/${Date.now()}_${file.name}`;
+    const storageRef = ref(storage, uniqueFileName);
+    await uploadBytes(storageRef, file);
+    return await getDownloadURL(storageRef);
+  };
+
+  const handleAddForum = async (e) => {
+    e.preventDefault();
+    if (newForum.title.trim() && newForum.content.trim()) {
+      setIsUploading(true);
       try {
-        const forumsCollection = collection(firestore, 'forums');
-        const forumSnapshot = await getDocs(forumsCollection);
-        const forumList = forumSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
-        setForumList(forumList);
+        let imageUrl = '';
+        if (newForum.image) {
+          imageUrl = await uploadImageToStorage(newForum.image);
+        }
+        const forumData = {
+          title: newForum.title,
+          content: newForum.content,
+          image: imageUrl,
+        };
+        await addDoc(collection(db, 'forums'), forumData);
+        resetForm();
       } catch (error) {
-        console.error('Error fetching forums:', error);
-        toast({
-          title: 'Error fetching forums',
-          description: 'Failed to load forums from Firestore. Check your permissions.',
-          status: 'error',
-          duration: 3000,
-          isClosable: true,
-        });
+        console.error("Error adding forum: ", error);
+      } finally {
+        setIsUploading(false);
       }
-    };
-
-    fetchForums();
-  }, []);
-
-  const checkAuth = () => {
-    const auth = getAuth();
-    const currentUser = auth.currentUser;
-    return currentUser;
-  };
-
-  const handleAddForum = async () => {
-    if (!isAdmin) {
-      toast({
-        title: 'Unauthorized',
-        description: 'Only admins can add forums.',
-        status: 'warning',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
+    } else {
+      alert('Please fill in all fields.');
     }
-
-    const currentUser = checkAuth();
-    if (!currentUser) {
-      toast({
-        title: 'Unauthorized',
-        description: 'You must be logged in to add forums.',
-        status: 'warning',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
-
-    if (!imageFile) {
-      toast({
-        title: 'Image Required',
-        description: 'Please upload an image before adding forum information.',
-        status: 'warning',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const uniqueFileName = `forums/${Date.now()}_${imageFile.name}`;
-      const storageRef = ref(storage, uniqueFileName);
-      await uploadBytes(storageRef, imageFile);
-      const downloadURL = await getDownloadURL(storageRef);
-
-      const newForum = {
-        forumName,
-        forumDescription,
-        imageUrl: downloadURL,
-      };
-
-      const docRef = await addDoc(collection(firestore, 'forums'), newForum);
-      setForumList([...forumList, { id: docRef.id, ...newForum }]);
-
-      toast({
-        title: 'Forum Added',
-        description: 'Forum has been successfully added.',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-      resetForm();
-    } catch (error) {
-      console.error('Error adding forum:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to add forum. Please try again.',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEditForum = (forumId) => {
-    if (!isAdmin) {
-      toast({
-        title: 'Unauthorized',
-        description: 'Only admins can edit forums.',
-        status: 'warning',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
-
-    const forumToEdit = forumList.find((forum) => forum.id === forumId);
-    if (forumToEdit) {
-      setIsEditMode(true);
-      setCurrentForumId(forumId);
-      setForumName(forumToEdit.forumName);
-      setForumDescription(forumToEdit.forumDescription);
-      setIsOpen(true);
-    }
-  };
-
-  const handleDeleteForum = async (forumId, e) => {
-    e.stopPropagation(); // Prevent triggering card click
-    if (!isAdmin) {
-      toast({
-        title: 'Unauthorized',
-        description: 'Only admins can delete forums.',
-        status: 'warning',
-        duration: 3000,
-        isClosable: true,
-      });
-      return;
-    }
-
-    try {
-      await deleteDoc(doc(firestore, 'forums', forumId));
-      const updatedForumList = forumList.filter((forum) => forum.id !== forumId);
-      setForumList(updatedForumList);
-
-      toast({
-        title: 'Forum Deleted',
-        description: 'Forum has been successfully deleted.',
-        status: 'success',
-        duration: 3000,
-        isClosable: true,
-      });
-    } catch (error) {
-      console.error('Error deleting forum:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to delete forum. Please try again.',
-        status: 'error',
-        duration: 3000,
-        isClosable: true,
-      });
-    }
-  };
-
-  const handleFileChange = (e) => {
-    setImageFile(e.target.files[0]);
   };
 
   const resetForm = () => {
-    setIsOpen(false);
-    setIsEditMode(false);
-    setForumName('');
-    setForumDescription('');
-    setImageFile(null);
-    setCurrentForumId(null);
+    setNewForum({ title: '', content: '', image: null });
+    setIsFormVisible(false);
   };
 
-  const handleCardClick = (imageUrl) => {
-    setPreviewUrl(imageUrl);
-    setIsPreviewOpen(true);
+  const handleDeleteForum = async (id) => {
+    setForums((prevForums) => prevForums.filter(forum => forum.id !== id));
+    try {
+      await deleteDoc(doc(db, 'forums', id));
+    } catch (error) {
+      console.error("Error deleting forum: ", error);
+    }
   };
 
-  const styles = {
-    container: {
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      flexDirection: 'column',
-      padding: '20px',
-      backgroundColor: '#f8f9fa',
-      minHeight: '100vh',
-      width: '100%',
-    },
-    mainContent: {
-      width: '100%',
-      maxWidth: '1200px',
-      backgroundColor: '#ffffff',
-      borderRadius: '8px',
-      boxShadow: '0 4px 20px rgba(0, 0, 0, 0.1)',
-      padding: '20px',
-      marginTop: '20px',
-    },
-    cardContainer: {
-      display: 'grid',
-      gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-      gap: '20px',
-      marginTop: '20px',
-      width: '100%',
-    },
-    card: {
-      position: 'relative',
-      cursor: 'pointer',
-      transition: 'transform 0.2s',
-      boxShadow: '0 4px 8px rgba(0, 0, 0, 0.1)',
-      borderRadius: '8px',
-      background: '#fff',
-      padding: '16px',
-      color: '#000',
-      display: 'flex',
-      flexDirection: 'column',
-      justifyContent: 'space-between',
-    },
-    actionButtons: {
-      display: 'flex',
-      justifyContent: 'space-between',
-      marginTop: '10px',
-    },
-    addButton: {
-      position: 'fixed',
-      bottom: '20px',
-      right: '20px',
-      backgroundColor: '#007bff',
-      color: 'white',
-      borderRadius: '50%',
-      width: '56px',
-      height: '56px',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      fontSize: '24px',
-      boxShadow: '0 4px 8px rgba(0, 0, 0, 0.2)',
-      cursor: 'pointer',
-      transition: 'transform 0.2s',
-    },
+  const handleEditForum = (index) => {
+    setIsEditing(index);
+    setNewForum({ ...forums[index], image: null }); // Keep existing image when editing
   };
+
+  const handleSaveEdit = async (index) => {
+    const forumToUpdate = forums[index];
+    const updatedForum = { ...forumToUpdate, ...newForum };
+
+    if (newForum.image) {
+      const imageUrl = await uploadImageToStorage(newForum.image);
+      updatedForum.image = imageUrl; // Update with new image URL if new image exists
+    } else {
+      updatedForum.image = forumToUpdate.image; // Keep the old image URL
+    }
+
+    try {
+      await setDoc(doc(db, 'forums', forumToUpdate.id), updatedForum);
+      setForums(forums.map((forum, i) => (i === index ? updatedForum : forum)));
+      setIsEditing(null);
+      resetForm();
+    } catch (error) {
+      console.error("Error updating forum: ", error);
+    }
+  };
+
+  const handleCardClick = (forum) => {
+    setSelectedForum(forum);
+    onOpen();
+  };
+
+  if (isLoading) {
+    return <div style={{ textAlign: 'center', marginTop: '50px' }}><Spinner size="xl" /></div>;
+  }
 
   return (
-    <div style={styles.container}>
-      <div style={styles.mainContent}>
-        <Heading as="h1" size="xl" textAlign="center">
-          Forums
-        </Heading>
-
-        <div style={styles.cardContainer}>
-          {forumList.map((forum) => (
-            <Card key={forum.id} style={styles.card} onClick={() => handleCardClick(forum.imageUrl)}>
-              <CardHeader>
-                <Heading size="md">{forum.forumName}</Heading>
-                <Text>{forum.forumDescription}</Text>
-              </CardHeader>
-              <CardBody>
-                <Image
-                  src={forum.imageUrl}
-                  alt={forum.forumName}
-                  style={{ width: '100%', height: 'auto', borderRadius: '8px' }}
+    <div style={{ padding: '20px', backgroundColor: '#f7f7f7', minHeight: '100vh' }}>
+      <Heading as="h1" size="xl" mb={10} textAlign="Left" color="#333">Forums</Heading>
+      <SimpleGrid columns={[1, 2, 3]} spacing={10}>
+        {forums.map((forum, index) => (
+          <Card
+            key={forum.id}
+            maxW="sm"
+            p={4}
+            bg="white"
+            shadow="md"
+            _hover={{ shadow: 'xl' }}
+            position="relative"
+            onClick={() => handleCardClick(forum)}
+            cursor="pointer"
+          >
+            <CardHeader>
+              {isAdmin && isEditing === index ? (
+                <Input
+                  value={newForum.title}
+                  onChange={(e) => setNewForum({ ...newForum, title: e.target.value })}
+                  placeholder="Edit forum title"
+                  bg="white"
+                  color="#333"
+                  border="1px solid #ddd"
                 />
-              </CardBody>
-              {isAdmin && (
-                <CardFooter style={styles.actionButtons}>
-                  <Button size="sm" colorScheme="blue" onClick={(e) => { e.stopPropagation(); handleEditForum(forum.id); }}>
-                    Edit
-                  </Button>
-                  <Button size="sm" colorScheme="red" onClick={(e) => handleDeleteForum(forum.id, e)}>
-                    Delete
-                  </Button>
-                </CardFooter>
+              ) : (
+                <Heading size="md" color="#333">{forum.title}</Heading>
               )}
-            </Card>
-          ))}
-        </div>
-      </div>
-
+            </CardHeader>
+            <CardBody>
+              {isAdmin && isEditing === index ? (
+                <>
+                  <Input
+                    value={newForum.content}
+                    onChange={(e) => setNewForum({ ...newForum, content: e.target.value })}
+                    placeholder="Edit content"
+                    bg="white"
+                    color="#333"
+                    border="1px solid #ddd"
+                    mb={2}
+                  />
+                  <Input
+                    type="file"
+                    onChange={(e) => setNewForum({ ...newForum, image: e.target.files[0] })}
+                    placeholder="Edit image"
+                    bg="white"
+                    color="#333"
+                    border="1px solid #ddd"
+                  />
+                  {forum.image && <img src={forum.image} alt={forum.title} style={{ width: '100%', borderRadius: '8px', marginTop: '10px' }} />}
+                </>
+              ) : (
+                <>
+                  <Text color="#555" mt={2}>{forum.content}</Text>
+                  {forum.image && <img src={forum.image} alt={forum.title} style={{ width: '100%', borderRadius: '8px' }} />}
+                </>
+              )}
+            </CardBody>
+            <CardFooter>
+              {isAdmin && isEditing === index ? (
+                <Button colorScheme="green" onClick={() => handleSaveEdit(index)}>Save</Button>
+              ) : null}
+              {isAdmin && !isEditing && (
+                <Flex position="absolute" top="5px" right="5px" gap="5px">
+                  <Button size="xs" colorScheme="blue" onClick={(e) => { e.stopPropagation(); handleEditForum(index); }}>Edit</Button>
+                  <Button size="xs" colorScheme="red" onClick={(e) => { e.stopPropagation(); handleDeleteForum(forum.id); }}>Delete</Button>
+                </Flex>
+              )}
+            </CardFooter>
+          </Card>
+        ))}
+      </SimpleGrid>
       {isAdmin && (
-        <div style={styles.addButton} onClick={() => setIsOpen(true)}>
-          +
-        </div>
+        <>
+          <IconButton
+            aria-label="Add forum"
+            icon={<AddIcon />}
+            colorScheme="blue"
+            onClick={() => setIsFormVisible(true)}
+            position="fixed"
+            bottom="20px"
+            right="20px"
+            borderRadius="full"
+            boxShadow="lg"
+            size="lg"
+          />
+          {isFormVisible && (
+            <IconButton
+              aria-label="Close form"
+              icon={<CloseIcon />}
+              colorScheme="red"
+              onClick={() => resetForm()}
+              position="fixed"
+              bottom="80px" // Adjusted to ensure visibility above the add button
+              right="20px"
+              borderRadius="full"
+              boxShadow="lg"
+              size="lg"
+              zIndex="1000" // Ensure it appears above other elements
+            />
+          )}
+        </>
       )}
-
-      <Modal isOpen={isOpen} onClose={resetForm}>
-        <ModalOverlay />
-        <ModalContent>
-          <ModalHeader>{isEditMode ? 'Edit Forum' : 'Add Forum'}</ModalHeader>
-          <ModalCloseButton />
-          <ModalBody>
-            <Input
-              placeholder="Forum Name"
-              value={forumName}
-              onChange={(e) => setForumName(e.target.value)}
-              mb={3}
-            />
-            <Input
-              placeholder="Forum Description"
-              value={forumDescription}
-              onChange={(e) => setForumDescription(e.target.value)}
-              mb={3}
-            />
-            <Input type="file" accept="image/*" onChange={handleFileChange} />
-          </ModalBody>
-          <ModalFooter>
-            <Button colorScheme="blue" onClick={handleAddForum} isLoading={loading}>
-              {isEditMode ? 'Save Changes' : 'Add Forum'}
-            </Button>
-            <Button onClick={resetForm}>Cancel</Button>
-          </ModalFooter>
-        </ModalContent>
-      </Modal>
-
-      <Modal isOpen={isPreviewOpen} onClose={() => setIsPreviewOpen(false)} size="xl">
-        <ModalOverlay />
-        <ModalContent>
-          <ModalCloseButton />
-          <ModalBody>
-            <Image src={previewUrl} alt="Forum Image Preview" />
-          </ModalBody>
-        </ModalContent>
-      </Modal>
+      {isAdmin && isFormVisible && (
+        <>
+          <Box
+            position="fixed"
+            top="0"
+            left="0"
+            width="100vw"
+            height="100vh"
+            bg="rgba(0, 0, 0, 0.5)"
+            zIndex="999"
+          />
+          <Box
+            position="fixed"
+            top="50%"
+            left="50%"
+            transform="translate(-50%, -50%)"
+            p={4}
+            bg="white"
+            borderRadius="8px"
+            boxShadow="lg"
+            zIndex="1001"
+            maxW="400px"
+            width="90%"
+          >
+            <Heading as="h3" size="lg" mb={4} color="#333" textAlign="center">Add New Forum</Heading>
+            <form onSubmit={handleAddForum}>
+              <Input
+                placeholder="Forum Title"
+                value={newForum.title}
+                onChange={(e) => setNewForum({ ...newForum, title: e.target.value })}
+                mb={2}
+                bg="white"
+                color="#333"
+                border="1px solid #ddd"
+              />
+              <Input
+                placeholder="Content"
+                value={newForum.content}
+                onChange={(e) => setNewForum({ ...newForum, content: e.target.value })}
+                mb={2}
+                bg="white"
+                color="#333"
+                border="1px solid #ddd"
+              />
+              <Input
+                type="file"
+                onChange={(e) => setNewForum({ ...newForum, image: e.target.files[0] })}
+                placeholder="Select image"
+                mb={2}
+                bg="white"
+                color="#333"
+                border="1px solid #ddd"
+              />
+              <Button colorScheme="blue" type="submit" isLoading={isUploading} width="100%">
+                {isUploading ? 'Uploading...' : 'Add Forum'}
+              </Button>
+              <Button 
+                colorScheme="red" 
+                onClick={resetForm} 
+                width="100%" 
+                mt={2} 
+                type="button" // Ensure this button doesn't submit the form
+              >
+                Close
+              </Button>
+            </form>
+          </Box>
+        </>
+      )}
+      {selectedForum && (
+        <Modal isOpen={isOpen} onClose={onClose} size="xl">
+          <ModalOverlay />
+          <ModalContent>
+            <ModalHeader>{selectedForum.title}</ModalHeader>
+            <ModalCloseButton />
+            <ModalBody>
+              <Text mb={4}>{selectedForum.content}</Text>
+              {selectedForum.image && <img src={selectedForum.image} alt={selectedForum.title} style={{ width: '100%', borderRadius: '8px' }} />}
+            </ModalBody>
+            <ModalFooter>
+              <Button colorScheme="blue" mr={3} onClick={onClose}>Close</Button>
+            </ModalFooter>
+          </ModalContent>
+        </Modal>
+      )}
     </div>
   );
 };
 
 export default ForumPage;
+

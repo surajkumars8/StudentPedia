@@ -14,7 +14,7 @@ import AuthPage from "./Pages/AuthPage/Authpage.jsx";
 import FacultyInfoPage from "./Pages/FacultyInfoPage";
 import ForumsPage from "./Pages/ForumsPage";
 import HomePage from "./pages/HomePage/HomePage";
-import LectureVideosPage from "./Pages/LectureVideosPage.jsx";
+import LectureVideosPage from "./pages/LectureVideosPage.jsx";
 import LostFoundPage from "./Pages/LostFoundPage";
 import MockTestPage from "./Pages/MockTestPage";
 import NotesPage from "./Pages/NotesPage";
@@ -97,7 +97,7 @@ function App() {
         <Route path="/createpost" element={<CreatePost />} />
         <Route path="/:username" element={<ProfilePage />} />
         <Route path="/notespage" element={<NotesPage isAdmin={isAdmin} />} />
-        <Route path="/forum" element={<ForumsPage />} />
+        <Route path="/forum" element={<ForumsPage isAdmin={isAdmin} />} />
         <Route path="/phixy" element={<Phixy />} />
 
         <Route
@@ -110,7 +110,7 @@ function App() {
         />
         <Route path="/lostandfound" element={<LostFoundPage />} />
         <Route path="/mocktest" element={<MockTestPage isAdmin={isAdmin} />} />
-        <Route path="/previouspaper" element={<PreviousPaperPage />} />
+        <Route path="/previouspaper" element={<PreviousPaperPage isAdmin={isAdmin}/>} />
         <Route path="/complaint" element={<Complaint />} />
       </Routes>
     </PageLayout>

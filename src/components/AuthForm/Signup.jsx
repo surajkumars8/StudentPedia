@@ -1,9 +1,10 @@
+import React, { useState } from "react";
 import {
-  createUserWithEmailAndPassword,
   getAuth,
+  createUserWithEmailAndPassword,
   sendEmailVerification,
 } from "firebase/auth";
-import { useState } from "react";
+import { getFirestore, doc, setDoc } from "firebase/firestore";
 import { useNavigate } from "react-router-dom";
 
 const Signup = () => {
@@ -12,8 +13,8 @@ const Signup = () => {
     email: "",
     password: "",
     confirmPassword: "",
+    isAdmin: false,
   });
-  const [showPassword, setShowPassword] = useState(false);
   const [passwordsMatch, setPasswordsMatch] = useState(true);
   const [firebaseError, setFirebaseError] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -21,6 +22,7 @@ const Signup = () => {
 
   const navigate = useNavigate();
   const auth = getAuth();
+  const db = getFirestore();
 
   const handleSignup = async () => {
     if (inputs.password !== inputs.confirmPassword) {
@@ -38,14 +40,27 @@ const Signup = () => {
     setFirebaseError(null);
 
     try {
+      // Create user with email and password
       const userCredential = await createUserWithEmailAndPassword(
         auth,
         inputs.email,
         inputs.password
       );
 
+      // Send email verification
       await sendEmailVerification(userCredential.user);
+
+      // Save user details to Firestore
+      const userRef = doc(db, "users", userCredential.user.uid);
+      await setDoc(userRef, {
+        firstName: inputs.firstName,
+        email: inputs.email,
+        createdAt: new Date().toISOString(),
+      });
+
       setVerificationEmailSent(true);
+      alert("Signup successful! Please verify your email.");
+      navigate("/auth");
     } catch (error) {
       setFirebaseError(
         error.code === "auth/email-already-in-use"
@@ -64,7 +79,6 @@ const Signup = () => {
       <div className="absolute bottom-0 left-0 w-64 h-64 bg-[#c3ecc3] rounded-full translate-y-1/2 -translate-x-1/2" />
       <div className="absolute top-20 left-20 w-16 h-16 bg-[#c3ecc3] rounded-full" />
 
-      {/* Main content */}
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center justify-center mb-8">
@@ -112,12 +126,12 @@ const Signup = () => {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Password!*
+                Password*
               </label>
               <input
                 className="w-full p-3 bg-[#E8E8E8] rounded-md focus:outline-none focus:ring-2 focus:ring-[#a8e4a8]"
                 placeholder="Enter your password"
-                type={showPassword ? "text" : "password"}
+                type="password"
                 value={inputs.password}
                 onChange={(e) =>
                   setInputs({ ...inputs, password: e.target.value })
@@ -132,7 +146,7 @@ const Signup = () => {
               <input
                 className="w-full p-3 bg-[#E8E8E8] rounded-md focus:outline-none focus:ring-2 focus:ring-[#a8e4a8]"
                 placeholder="Confirm your password"
-                type={showPassword ? "text" : "password"}
+                type="password"
                 value={inputs.confirmPassword}
                 onChange={(e) =>
                   setInputs({ ...inputs, confirmPassword: e.target.value })
@@ -153,15 +167,23 @@ const Signup = () => {
             <button
               className="w-full bg-black text-white py-3 rounded-md hover:bg-gray-800 transition-colors"
               disabled={loading}
-              onClick={handleSignup}>
+              onClick={handleSignup}
+            >
               {loading ? "Creating account..." : "Create account"}
             </button>
+
+            {verificationEmailSent && (
+              <div className="text-green-600 text-sm mt-4">
+                Verification email sent! Please check your inbox.
+              </div>
+            )}
 
             <div className="text-center">
               <button
                 onClick={() => navigate("/auth")}
-                className="text-black hover:underline text-sm">
-                goback
+                className="text-black hover:underline text-sm"
+              >
+                Go Back
               </button>
             </div>
           </div>

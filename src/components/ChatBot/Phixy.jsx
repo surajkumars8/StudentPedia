@@ -1,94 +1,247 @@
-import { ChatIcon } from "@chakra-ui/icons";
-import { Box, Button, Input, VStack } from "@chakra-ui/react"; // Chakra UI for styling
-import { useEffect, useRef, useState } from "react";
+import React, { useState, useEffect, useRef } from 'react';
+import { 
+  Box, 
+  Flex, 
+  Input, 
+  Button, 
+  Text, 
+  VStack, 
+  HStack, 
+  Avatar, 
+  useColorMode,
+  useColorModeValue
+} from "@chakra-ui/react";
+import { keyframes } from "@emotion/react";
+import { ChatIcon, MoonIcon, SunIcon } from "@chakra-ui/icons";
+import { Send } from 'lucide-react'; // Import Send icon from Lucide React
+import axios from "axios";
+
+// Typing animation
+const typingAnimation = keyframes`
+  0%, 100% { opacity: 0.5 }
+  50% { opacity: 1 }
+`;
 
 const Phixy = () => {
   const [messages, setMessages] = useState([
-    { sender: "Phixy", text: "Hello! How can I assist you today?" },
+    { sender: "Phixy", text: "Hello! I'm Phixy, your intelligent AI assistant. How can I help you today?" }
   ]);
   const [input, setInput] = useState("");
-  const messageEndRef = useRef(null); // For auto-scrolling to the latest message
+  const [isLoading, setIsLoading] = useState(false);
+  const { colorMode, toggleColorMode } = useColorMode();
+  const messageEndRef = useRef(null);
 
-  // Function to handle message submission
-  const handleSendMessage = () => {
+  // Enhanced color theming
+  const bgColor = useColorModeValue("gray.50", "gray.900");
+  const chatBgColor = useColorModeValue("white", "gray.800");
+  const messageBgColor = useColorModeValue("gray.100", "gray.700");
+  const accentColor = useColorModeValue("teal.500", "teal.300");
+
+  const handleSendMessage = async () => {
     if (input.trim()) {
-      // Add the user's message to the chat
-      setMessages([...messages, { sender: "User", text: input }]);
-
-      // Simulate Phixy's response (You can replace this with an API call)
-      setTimeout(() => {
-        setMessages((prevMessages) => [
-          ...prevMessages,
-          { sender: "Phixy", text: "I'm here to help you!" },
-        ]);
-      }, 1000);
-
-      // Clear the input field
+      const userMessage = { sender: "User", text: input };
+      setMessages(prev => [...prev, userMessage]);
       setInput("");
+      setIsLoading(true);
+
+      try {
+        const apiConfig = {
+          method: "POST",
+          url: "https://chat-gpt26.p.rapidapi.com/",
+          headers: {
+            "x-rapidapi-key": "21d7a66cc2msh5ee8228d309a1dbp106066jsne89e0888b76f",
+            "x-rapidapi-host": "chat-gpt26.p.rapidapi.com",
+            "Content-Type": "application/json",
+          },
+          data: {
+            model: "gpt-3.5-turbo",
+            messages: [
+              ...messages.map((msg) => ({
+                role: msg.sender === "Phixy" ? "assistant" : "user",
+                content: msg.text,
+              })),
+              { role: "user", content: input },
+            ],
+          },
+        };
+
+        const response = await axios.request(apiConfig);
+        const aiResponse = response.data.choices[0]?.message?.content || "I'm not sure how to respond to that.";
+
+        setMessages(prev => [
+          ...prev,
+          { sender: "Phixy", text: aiResponse }
+        ]);
+      } catch (error) {
+        console.error("Error communicating with AI:", error);
+        setMessages(prev => [
+          ...prev,
+          { 
+            sender: "Phixy", 
+            text: "I'm experiencing some technical difficulties. Please try again later." 
+          }
+        ]);
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
-  // Auto-scroll to the bottom when new messages are added
+  // Auto-scroll to bottom
   useEffect(() => {
     messageEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100">
+    <Flex 
+      height="100vh" 
+      bg={bgColor} 
+      alignItems="center" 
+      justifyContent="center"
+      p={4}
+    >
       <Box
-        className="shadow-lg rounded-lg"
-        bg="white"
-        p={5}
-        maxW="8xl"
-        w="full"
-        h="full"
-        minH="600px"
+        width="100%" 
+        maxWidth="1000px" 
+        height="95vh"
+        bg={chatBgColor}
+        borderRadius="2xl"
+        boxShadow="2xl"
         display="flex"
-        flexDirection="column">
-        <Box className="flex items-center justify-center mb-6">
-          <ChatIcon boxSize={8} color="teal.500" />
-          <h1 className="text-2xl font-bold ml-2">Phixy </h1>
-        </Box>
+        flexDirection="column"
+        overflow="hidden"
+      >
+        {/* Header with Theme Toggle */}
+        <Flex 
+          alignItems="center" 
+          justifyContent="space-between"
+          bg={accentColor}
+          color="white"
+          p={4}
+        >
+          <HStack spacing={3}>
+            <ChatIcon boxSize={6} />
+            <Text fontWeight="bold" fontSize="xl">Phixy AI</Text>
+          </HStack>
+          <Button 
+            onClick={toggleColorMode} 
+            variant="ghost" 
+            color="white"
+            _hover={{ bg: "whiteAlpha.200" }}
+          >
+            {colorMode === 'light' ? <MoonIcon /> : <SunIcon />}
+          </Button>
+        </Flex>
 
-        {/* Chat Window */}
-        <VStack
-          className="flex-grow bg-gray-200 rounded-md p-4 overflow-auto"
-          spacing={4}
-          align="start">
+        {/* Chat Messages Area */}
+        <VStack 
+          flex={1} 
+          p={4} 
+          spacing={4} 
+          overflowY="auto" 
+          bg={messageBgColor}
+        >
           {messages.map((message, index) => (
-            <Box
+            <HStack
               key={index}
-              alignSelf={message.sender === "Phixy" ? "start" : "end"}
-              bg={message.sender === "Phixy" ? "green.100" : "blue.100"}
-              color="gray.800"
-              p={3}
-              borderRadius="md"
-              maxW="80%">
-              <strong>{message.sender}:</strong> {message.text}
-            </Box>
+              alignSelf={message.sender === "Phixy" ? "flex-start" : "flex-end"}
+              maxW="90%"
+              w="full"
+              spacing={3}
+            >
+              {message.sender === "Phixy" && (
+                <Avatar 
+                  name="Phixy" 
+                  bg={accentColor}
+                  color="white" 
+                  size="sm" 
+                />
+              )}
+              <Box
+                bg={message.sender === "Phixy" ? "green.100" : "blue.100"}
+                color="gray.800"
+                p={3}
+                borderRadius="lg"
+                maxW="80%"
+                boxShadow="sm"
+              >
+                <Text fontWeight="bold" fontSize="xs" mb={1} color="gray.600">
+                  {message.sender}
+                </Text>
+                <Text>{message.text}</Text>
+              </Box>
+              {message.sender === "User" && (
+                <Avatar 
+                  name="User" 
+                  bg="blue.500" 
+                  color="white" 
+                  size="sm" 
+                />
+              )}
+            </HStack>
           ))}
-          {/* Dummy div for auto-scroll */}
+
+          {/* Typing Indicator */}
+          {isLoading && (
+            <HStack alignSelf="flex-start" maxW="90%">
+              <Avatar 
+                name="Phixy" 
+                bg={accentColor}
+                color="white" 
+                size="sm" 
+              />
+              <Flex 
+                bg="green.100" 
+                p={3} 
+                borderRadius="lg"
+                alignItems="center"
+              >
+                <Text 
+                  color="gray.600" 
+                  fontStyle="italic"
+                  animation={`${typingAnimation} 1.4s infinite`}
+                >
+                  Phixy is typing...
+                </Text>
+              </Flex>
+            </HStack>
+          )}
+          
           <div ref={messageEndRef} />
         </VStack>
 
-        {/* Message Input */}
-        <Box mt={4} display="flex" alignItems="center">
+        {/* Message Input Area */}
+        <Flex 
+          p={4} 
+          bg={chatBgColor}
+          borderTop="1px"
+          borderColor={useColorModeValue("gray.200", "gray.600")}
+        >
           <Input
-            placeholder="Type a message..."
+            flex={1}
+            mr={3}
+            placeholder="Type your message..."
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={(e) => e.key === "Enter" && handleSendMessage()}
+            bg={messageBgColor}
+            borderColor={useColorModeValue("gray.300", "gray.600")}
+            _focus={{
+              borderColor: accentColor,
+              boxShadow: `0 0 0 1px ${accentColor}`
+            }}
           />
           <Button
             colorScheme="teal"
-            ml={3}
             onClick={handleSendMessage}
-            isDisabled={!input.trim()}>
+            isDisabled={!input.trim() || isLoading}
+            leftIcon={<Send size={20} />} // Using Send icon from Lucide React
+          >
             Send
           </Button>
-        </Box>
+        </Flex>
       </Box>
-    </div>
+    </Flex>
   );
 };
 
