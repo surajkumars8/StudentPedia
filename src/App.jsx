@@ -67,7 +67,7 @@ function App() {
               isAdmin ? (
                 <Navigate to="/admin" />
               ) : (
-                <HomePage />
+                <Homepage />
               )
             ) : (
               <Navigate to="/auth" />

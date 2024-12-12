@@ -3,7 +3,7 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faStickyNote, faFileAlt, faClipboardCheck, faVideo, faBoxOpen, faChalkboardTeacher, faComments, faSignOutAlt, faHome, faCommentDots, faRobot, faUser } from '@fortawesome/free-solid-svg-icons';
 import LectureVideosPage from '../LectureVideosPage';
 
-const HomePage = () => {
+const Homepage = () => {
   
    
     const styles = {
@@ -54,4 +54,4 @@ const HomePage = () => {
     );
 };
 
-export default HomePage;
+export default Homepage;
