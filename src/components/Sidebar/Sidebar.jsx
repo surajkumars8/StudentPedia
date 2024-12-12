@@ -4,7 +4,7 @@ import { Link as RouterLink } from "react-router-dom";
 
 import { BiLogOut } from "react-icons/bi";
 import useLogout from "../../hooks/useLogout";
-import Sidepage from "./sidepage";
+import Sidepage from "./Sidepage";
 
 const Sidebar = () => {
   const { handleLogout, isLoggingOut } = useLogout();
