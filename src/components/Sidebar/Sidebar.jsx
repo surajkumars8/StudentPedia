@@ -26,7 +26,7 @@ const Sidebar = () => {
           display={{ base: "none", md: "block" }}
           cursor="pointer">
           <img
-            src="/public/assets/Group 205.png"
+            src="/src/assets/Group 205.png"
             alt="logo"
             height={150}
             width={150}

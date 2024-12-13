@@ -83,7 +83,7 @@ const Signup = () => {
         {/* Logo */}
         <div className="flex items-center justify-center mb-8">
           <img
-            src="/public/assets/logo.png"
+            src="/src/assets/logofinal.png"
             alt="StudentPedia"
             className="h-8"
           />

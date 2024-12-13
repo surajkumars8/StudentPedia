@@ -46,16 +46,18 @@ const Login = () => {
   return (
     <div className="min-h-100vh flex items-center justify-center  relative overflow-hidden">
       {/* Background decorative elements */}
-      <div className="absolute top-0 right-0 w-48 h-48  rounded-full -translate-y-1/2 translate-x-1/2" />
+      {/* <div className="absolute top-0 right-0 w-48 h-48  rounded-full -translate-y-1/2 translate-x-1/2" />
       <div className="absolute bottom-0 left-0 w-64 h-64 rounded-full translate-y-1/2 -translate-x-1/2" />
-      <div className="absolute top-20 left-20 w-16 h-16  rounded-full" />
+      <div className="absolute top-20 left-20 w-16 h-16  rounded-full" /> */
+      
+      }
 
       {/* Main content */}
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex items-center justify-center mb-8">
           <img
-            src="/public/assets/logo.png"
+            src="/src/assets/logofinal.png"
             alt="StudentPedia"
             className="h-8"
           />

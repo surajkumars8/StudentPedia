@@ -1,4 +1,7 @@
 
+import ProfilePage from "../../Pages/ProfilePage/ProfilePage";
+import Phixy from "../ChatBot/Phixy";
+import Complaint from "../Complaint/Complaint";
 import FacultyInfo from "./FacultyInfo";
 import Forums from "./Forums";
 
@@ -22,6 +25,10 @@ const SidebarItems = () => {
       <FacultyInfo />
       <ProfileLink/>
       <Forums/>
+      <ProfilePage/>
+      <Complaint/>
+      <Phixy/>
+
     </>
   );
 };

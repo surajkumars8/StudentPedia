@@ -8,7 +8,9 @@ const AuthForm = () => {
 
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden">
-      {/* Background decorative elements */}
+      {/* Background decorative elements */
+      <img src="/public/assets/bg.png" alt="hi" className="absolute top-0 left-0 w-full h-full object-cover opacity-50" />
+      }
 
       {/* Main content */}
       <Box>
